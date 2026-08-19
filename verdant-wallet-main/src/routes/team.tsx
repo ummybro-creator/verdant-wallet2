@@ -12,7 +12,7 @@ export const Route = createFileRoute("/team")({
       { title: "My Team — Velvato referrals" },
       { name: "description", content: "Track team size, team recharge and level commissions." },
       { property: "og:title", content: "My Team — Velvato" },
-      { property: "og:description", content: "Grow your team and earn up to 10% commission." },
+      { property: "og:description", content: "Grow your team and earn up to 30% commission." },
     ],
   }),
   component: TeamPage,

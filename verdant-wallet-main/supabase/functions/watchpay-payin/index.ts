@@ -75,6 +75,7 @@ serve(async (req) => {
     // Determine callback URL (WatchPay will POST here on payment success)
     const siteUrl = Deno.env.get("SITE_URL") || "https://xihslaahlgvlggolkbqh.supabase.co";
     const callbackUrl = `${siteUrl}/functions/v1/watchpay-callback`;
+    const returnUrl = "https://verdant-ice2.vercel.app/";
 
     const amountStr = amount.toFixed(2);
     const merchantOrderNo = generateOrderNo();
@@ -86,6 +87,7 @@ serve(async (req) => {
       callback_url: callbackUrl,
       merchant_id: MERCHANT_ID,
       merchant_order_no: merchantOrderNo,
+      return_url: returnUrl,
     };
     const sortedKeys = Object.keys(params).sort();
 
@@ -103,6 +105,7 @@ serve(async (req) => {
       amount: amountStr,
       merchant_order_no: merchantOrderNo,
       callback_url: callbackUrl,
+      return_url: returnUrl,
       extra: user.id, // store user id for callback processing
       signature,
     };

@@ -14,7 +14,7 @@ export const Route = createFileRoute("/share")({
       { title: "Share & earn — Velvato referral program" },
       {
         name: "description",
-        content: "Share your referral link and earn 10%, 3% and 1% across three levels.",
+        content: "Share your referral link and earn 25%, 3% and 2% across three levels.",
       },
       { property: "og:title", content: "Share & earn — Velvato" },
       {
