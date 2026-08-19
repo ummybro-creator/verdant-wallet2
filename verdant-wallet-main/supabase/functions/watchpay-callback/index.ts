@@ -10,23 +10,30 @@ serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  let body: {
-    orderNo?: string;
-    merchantOrder?: string;
-    status?: string;
-    amount?: number;
-  };
-
+  let body: Record<string, any> = {};
   try {
-    body = await req.json();
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      const text = await req.text();
+      const params = new URLSearchParams(text);
+      for (const [key, value] of params.entries()) {
+        body[key] = value;
+      }
+    } else {
+      body = await req.json();
+    }
   } catch {
-    return new Response("Bad request", { status: 400 });
+    return new Response("Bad request body", { status: 400 });
   }
 
-  const { orderNo, merchantOrder, status, amount } = body;
+  const orderNo = body.orderNo || body.order_no;
+  const merchantOrder = body.merchantOrder || body.merchant_order_no;
+  const status = body.status || body.trade_status;
+  const amount = body.amount;
 
   // Only process successful payments
-  if (status !== "success") {
+  // (some gateways send 'success', some '1', some 'SUCCESS', 'PAID')
+  if (String(status).toLowerCase() !== "success" && String(status) !== "1" && String(status).toLowerCase() !== "paid") {
     console.log(`[watchpay-callback] Ignoring non-success status: ${status}`);
     return new Response("success", { status: 200 });
   }
