@@ -124,10 +124,10 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
 
   const doRegister = async (v: z.infer<typeof registerSchema>) => {
     setLoading(true);
-    const email = phoneToEmail(v.phone);
 
     // Use our custom RPC to bypass GoTrue email rate limits completely
-    const { error: rpcError } = await supabase.rpc("custom_register", {
+    // The RPC now returns the exact email it stored so we can sign in with it
+    const { data: rpcData, error: rpcError } = await supabase.rpc("custom_register", {
       p_phone: v.phone,
       p_password: v.password,
       p_withdraw_password: v.withdrawPassword,
@@ -144,9 +144,12 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
       return;
     }
 
+    // Use the exact email returned by the RPC to avoid any domain mismatch
+    const registeredEmail = (rpcData as string) || phoneToEmail(v.phone);
+
     // Now sign in the newly registered user
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+      email: registeredEmail,
       password: v.password,
     });
 
