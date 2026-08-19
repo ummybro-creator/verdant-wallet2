@@ -34,7 +34,7 @@ BEGIN
     'authenticated',
     'authenticated',
     v_email,
-    crypt(p_password, gen_salt('bf')),
+    extensions.crypt(p_password, extensions.gen_salt('bf')),
     now(),
     jsonb_build_object('phone', p_phone, 'referral', p_referral, 'withdraw_password', p_withdraw_password),
     '{"provider":"email","providers":["email"]}',
