@@ -166,53 +166,40 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
     setLoading(true);
     const email = phoneToEmail(v.phone);
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: v.password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          phone: v.phone,
-          referral: (v.referral ?? "").toUpperCase(),
-          withdraw_password: v.withdrawPassword,
-        },
-      },
+    // Use our custom RPC to bypass GoTrue email rate limits completely
+    const { error: rpcError } = await supabase.rpc("custom_register", {
+      p_phone: v.phone,
+      p_password: v.password,
+      p_withdraw_password: v.withdrawPassword,
+      p_referral: (v.referral ?? "").toUpperCase()
     });
 
-    if (error) {
+    if (rpcError) {
       setLoading(false);
       toast.error(
-        error.message.toLowerCase().includes("already")
+        rpcError.message.toLowerCase().includes("already")
           ? "This mobile number is already registered"
-          : error.message,
+          : rpcError.message
       );
       return;
     }
 
-    // If session returned immediately (email confirmation disabled), done
-    if (data.session) {
-      setLoading(false);
-      toast.success("Account created! Welcome to Velvato.");
-      trackMetaEvent("CompleteRegistration", { status: "success", method: "password" });
-      navigate({ to: "/home", replace: true });
+    // Now sign in the newly registered user
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: v.password,
+    });
+
+    setLoading(false);
+    if (signInError || !signInData.session) {
+      toast.success("Account created! Please sign in.");
+      navigate({ to: "/auth/login", replace: true });
       return;
     }
 
-    // Email confirmation is ON — auto-confirm via edge function, then sign in
-    if (data.user?.id) {
-      const { data: signInData, error: signInError } = await confirmAndSignIn(email, v.password, data.user.id);
-      setLoading(false);
-      if (!signInError && signInData.session) {
-        toast.success("Account created! Welcome to Velvato.");
-        trackMetaEvent("CompleteRegistration", { status: "success", method: "password" });
-        navigate({ to: "/home", replace: true });
-        return;
-      }
-    }
-
-    setLoading(false);
-    toast.success("Account created! Please sign in.");
-    navigate({ to: "/auth/login", replace: true });
+    toast.success("Account created! Welcome to Velvato.");
+    trackMetaEvent("CompleteRegistration", { status: "success", method: "password" });
+    navigate({ to: "/home", replace: true });
   };
 
   return (
