@@ -83,9 +83,8 @@ function RechargePage() {
         return;
       }
 
-      // Open WatchPay payment page in new tab
-      window.open(data.payment_url, "_blank", "noopener,noreferrer");
-      toast.success("Payment window opened! Complete your payment there.");
+      // Redirect to WatchPay payment page in the same tab to avoid mobile popup blockers
+      window.location.href = data.payment_url;
     } catch (err) {
       console.error("[recharge] Payment initiation failed:", err);
       toast.error("Something went wrong. Please try again.");
