@@ -87,7 +87,6 @@ serve(async (req) => {
       callback_url: callbackUrl,
       merchant_id: MERCHANT_ID,
       merchant_order_no: merchantOrderNo,
-      return_url: returnUrl,
     };
     const sortedKeys = Object.keys(params).sort();
 
