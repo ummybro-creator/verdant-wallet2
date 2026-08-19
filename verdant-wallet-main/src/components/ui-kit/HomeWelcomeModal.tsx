@@ -4,42 +4,49 @@ import { useEffect, useState } from "react";
 const TELEGRAM_CHANNEL = "https://t.me/+Gbku0_QTm7EwYzU1";
 
 const launchDetails = [
-  ["Launch Date", "10 August 2026"],
-  ["Minimum Recharge", "₹0"],
+  ["SignUp Reward", "₹20"],
+  ["Minimum Recharge", "₹₹290"],
   ["Minimum Withdrawal", "₹210"],
   ["Withdrawal Time", "24x7 hours"],
-  ["Team Commission", "43%"],
+  ["Team Commission", "30%"],
 ] as const;
 
 export function HomeWelcomeModal() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const dismissed = window.sessionStorage.getItem("velvato-welcome-dismissed") === "1";
-    setOpen(!dismissed);
+    setOpen(true);
+
+    const onOpenEvent = () => setOpen(true);
+    window.addEventListener("open-welcome-modal", onOpenEvent);
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        window.sessionStorage.setItem("velvato-welcome-dismissed", "1");
         document.body.style.overflow = "";
         setOpen(false);
       }
     };
 
-    const previousBodyOverflow = document.body.style.overflow;
-    if (!dismissed) document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
 
     return () => {
-      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.overflow = "";
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("open-welcome-modal", onOpenEvent);
     };
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+  }, [open]);
 
   if (!open) return null;
 
   const dismiss = () => {
-    window.sessionStorage.setItem("velvato-welcome-dismissed", "1");
     document.body.style.overflow = "";
     setOpen(false);
   };

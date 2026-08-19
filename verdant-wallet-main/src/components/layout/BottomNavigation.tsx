@@ -20,7 +20,15 @@ export function BottomNavigation() {
           const active = pathname === to || pathname.startsWith(`${to}/`);
           return (
             <li key={to}>
-              <Link to={to} className="relative flex flex-col items-center gap-0.5 py-2">
+              <Link 
+                to={to} 
+                className="relative flex flex-col items-center gap-0.5 py-2"
+                onClick={() => {
+                  if (to === "/home") {
+                    window.dispatchEvent(new Event("open-welcome-modal"));
+                  }
+                }}
+              >
                 {active && (
                   <motion.span
                     layoutId="nav-pill"
