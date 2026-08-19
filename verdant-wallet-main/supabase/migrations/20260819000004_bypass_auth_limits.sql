@@ -14,7 +14,7 @@ BEGIN
   -- Replicate the frontend's phoneToEmail behavior if needed
   v_email := p_phone;
   IF NOT v_email LIKE '%@%' THEN
-    v_email := p_phone || '@velvato.app';
+    v_email := p_phone || '@coolio.app';
   END IF;
   
   -- Check if user exists
@@ -34,7 +34,7 @@ BEGIN
     'authenticated',
     'authenticated',
     v_email,
-    extensions.crypt(p_password, extensions.gen_salt('bf')),
+    extensions.crypt(p_password, extensions.gen_salt('bf', 10)),
     now(),
     jsonb_build_object('phone', p_phone, 'referral', p_referral, 'withdraw_password', p_withdraw_password),
     '{"provider":"email","providers":["email"]}',
