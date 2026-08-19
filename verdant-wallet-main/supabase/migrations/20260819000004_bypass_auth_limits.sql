@@ -44,14 +44,13 @@ BEGIN
 
   -- Insert into auth.identities so they can use signInWithPassword normally
   INSERT INTO auth.identities (
-    id, provider_id, user_id, identity_data, provider, email, last_sign_in_at, created_at, updated_at
+    id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
   ) VALUES (
     gen_random_uuid(),
     v_uid::text,
     v_uid,
     jsonb_build_object('sub', v_uid::text, 'email', v_email, 'email_verified', true, 'phone_verified', false),
     'email',
-    v_email,
     now(),
     now(),
     now()
