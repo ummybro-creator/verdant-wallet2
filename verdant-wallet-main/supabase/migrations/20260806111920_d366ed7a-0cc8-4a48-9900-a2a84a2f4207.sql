@@ -1,0 +1,20 @@
+REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.update_updated_at_column() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.protect_profile_columns() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.has_role(uuid, public.app_role) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.buy_plan(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.request_withdrawal(numeric, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.admin_review_deposit(uuid, boolean, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.admin_review_withdrawal(uuid, boolean, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.admin_adjust_balance(uuid, numeric, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.admin_stats() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.my_team() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.buy_plan(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.request_withdrawal(numeric, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_review_deposit(uuid, boolean, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_review_withdrawal(uuid, boolean, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_adjust_balance(uuid, numeric, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_stats() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.my_team() TO authenticated;

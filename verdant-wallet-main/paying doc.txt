@@ -1,0 +1,123 @@
+WatchPays Pay-in API
+Create payment orders and collect funds through WatchPays gateways.
+
+Payin API Key: ecdc22888b6ce064a4bc3fa9739e31d0
+
+
+Endpoint
+POST https://api.watchpays.com/v1/create
+Content-Type: application/json
+Request Parameters
+Field	Required	Description
+merchant_id	Yes	Your merchant ID
+api_key	Yes	Your API Key
+amount	Yes	Amount (2 decimals)
+merchant_order_no	Yes	Unique order number
+callback_url	Yes	Redirect URL
+extra	No	Optional data
+signature	Yes	MD5 signature
+Signature Generation
+Step 1: Prepare params merchant_id, amount, merchant_order_no, callback_url
+
+Step 2: Remove empty values
+
+Step 3: Sort alphabetically
+amount → callback_url → merchant_id → merchant_order_no
+
+Step 4: Build string
+amount=1000.00&callback_url=https://site.com/callback&merchant_id=MERCH1001&merchant_order_no=ORD20250201
+
+Step 5: Append API key
+amount=1000.00&callback_url=https://site.com/callback&merchant_id=MERCH1001&merchant_order_no=ORD20250201&key=API_KEY
+
+Step 6: MD5 hash → signature
+• Amount must always have 2 decimals
+• Do not URL encode callback_url
+• Sorting is mandatory
+
+PHP Signature Example
+
+<?php
+
+$merchant_id = "100555001";
+$api_key = "sk_live_xxx";
+
+$amount = number_format(1000,2,'.','');
+$merchant_order_no = "ORD20250201";
+$callback_url = "https://site.com/callback";
+
+$params = [
+    "merchant_id" => $merchant_id,
+    "amount" => $amount,
+    "merchant_order_no" => $merchant_order_no,
+    "callback_url" => $callback_url
+];
+
+$params = array_filter($params);
+ksort($params);
+
+$signStr = "";
+
+foreach($params as $k=>$v){
+    $signStr .= $k."=".$v."&";
+}
+
+$signStr .= "key=".$api_key;
+
+$signature = md5($signStr);
+
+echo $signature;
+
+?>
+Example Request
+
+{
+  "merchant_id": "MERCH1001",
+  "api_key": "sk_live_xxx",
+  "amount": "1000.00",
+  "merchant_order_no": "ORD20250201",
+  "callback_url": "https://site.com/callback",
+  "extra": "user001",
+  "signature": "generated_md5_here"
+}
+Success Response
+
+{
+  "success": true,
+  "merchant_order_no": "ORD20250201",
+  "order_no": "GW202502010001",
+  "amount": "1000.00",
+  "payment_url": "https://gateway.com/pay/GW202502010001",
+  "status": "created"
+}
+Error Response
+
+Invalid signature  
+Order already exists  
+Invalid merchant  
+Payment Callback API
+WatchPays sends payment status to your server.
+
+POST JSON
+Payload
+
+{
+  "orderNo": "GW202502010001",
+  "merchantOrder": "ORD20250201",
+  "status": "success",
+  "amount": 1000
+}
+Process
+Verify order
+Match amount
+Avoid duplicate
+Mark success
+Credit wallet
+Response
+success
+Important Notes
+Use HTTPS only
+Unique merchant_order_no
+Amount must match exactly
+Never expose API key
+Save gateway order numbers
