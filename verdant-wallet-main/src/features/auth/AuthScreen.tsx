@@ -100,17 +100,6 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
     },
   });
 
-  const confirmAndSignIn = async (email: string, password: string, userId: string) => {
-    const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
-    // Auto-confirm the user's email via edge function
-    await fetch(`${supabaseUrl}/functions/v1/auth-auto-confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId }),
-    });
-    // Now sign in
-    return supabase.auth.signInWithPassword({ email, password });
-  };
 
   const doLogin = async (v: z.infer<typeof loginSchema>) => {
     setLoading(true);
@@ -119,41 +108,12 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
       email,
       password: v.password,
     });
+    setLoading(false);
     if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes("email not confirmed")) {
-        // Try to find user and auto-confirm
-        const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
-        // We need the user ID — attempt signup which returns the existing user if they exist
-        const { data: signUpData } = await supabase.auth.signUp({
-          email,
-          password: v.password,
-        });
-        if (signUpData?.user?.id) {
-          const { data: retryData, error: retryError } = await confirmAndSignIn(email, v.password, signUpData.user.id);
-          setLoading(false);
-          if (!retryError && retryData.session) {
-            toast.success("Welcome back!");
-            trackMetaEvent("Login", { method: "password" });
-            navigate({ to: "/home", replace: true });
-            return;
-          }
-        }
-        setLoading(false);
-        toast.error("Could not sign in. Please try registering again.");
-        return;
-      }
-      setLoading(false);
-      toast.error(
-        msg.includes("invalid") || msg.includes("credentials")
-          ? "Incorrect mobile number or password"
-          : error.message,
-      );
+      toast.error("Incorrect mobile number or password");
       return;
     }
-    setLoading(false);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!data.session && !session) {
+    if (!data.session) {
       toast.error("Login session could not be created. Please try again.");
       return;
     }
