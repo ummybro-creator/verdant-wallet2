@@ -214,7 +214,13 @@ export function useNotifications() {
 export type TeamData = {
   size: number;
   recharge: number;
-  members: { phone: string; joined: string; recharge: number }[];
+  level1_size: number;
+  level1_recharge: number;
+  level2_size: number;
+  level2_recharge: number;
+  level3_size: number;
+  level3_recharge: number;
+  members: { phone: string; joined: string; recharge: number; level: number }[];
 };
 
 export function useTeam() {

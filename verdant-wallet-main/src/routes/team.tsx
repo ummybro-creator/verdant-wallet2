@@ -25,9 +25,9 @@ function TeamPage() {
 
   const inviteCode = profile?.invite_code ?? "—";
   const levels = [
-    { level: "Level 1", rate: settings?.level1_rate ?? 0, members: team?.size ?? 0, recharge: team?.recharge ?? 0 },
-    { level: "Level 2", rate: settings?.level2_rate ?? 0, members: 0, recharge: 0 },
-    { level: "Level 3", rate: settings?.level3_rate ?? 0, members: 0, recharge: 0 },
+    { level: "Level 1", rate: settings?.level1_rate ?? 0, members: team?.level1_size ?? 0, recharge: team?.level1_recharge ?? 0 },
+    { level: "Level 2", rate: settings?.level2_rate ?? 0, members: team?.level2_size ?? 0, recharge: team?.level2_recharge ?? 0 },
+    { level: "Level 3", rate: settings?.level3_rate ?? 0, members: team?.level3_size ?? 0, recharge: team?.level3_recharge ?? 0 },
   ];
 
   return (
