@@ -4,6 +4,7 @@ import { Card } from "./Card";
 import { Button } from "./Button";
 import { INR } from "@/utils/format";
 import { planImage, type Plan } from "@/services/api";
+import { trackMetaSubscribe } from "@/lib/meta-pixel";
 
 export function StatBox({ value, label }: { value: string; label: string }) {
   return (
@@ -41,7 +42,7 @@ export function ProductCard({ plan, delay = 0 }: { plan: Plan; delay?: number })
           size="md"
           className="w-full"
           onClick={() => {
-            (window as Window & { fbq?: (...args: unknown[]) => void }).fbq?.("track", "Subscribe");
+            trackMetaSubscribe({ plan: plan.name, price: plan.price });
           }}
         >
           Buy now ({INR(plan.price)})

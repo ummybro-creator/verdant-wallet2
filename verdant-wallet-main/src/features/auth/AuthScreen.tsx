@@ -11,7 +11,7 @@ import { Input, PasswordInput, PhoneInput } from "@/components/ui-kit/Input";
 import { PrimaryButton } from "@/components/ui-kit/Button";
 import { supabase } from "@/integrations/supabase/client";
 import { phoneToEmail } from "@/services/api";
-import { trackMetaEvent } from "@/lib/meta-pixel";
+import { trackMetaEvent, trackMetaSubscribe } from "@/lib/meta-pixel";
 
 const loginSchema = z.object({
   phone: z.string().refine((v) => /^[6-9]\d{9}$/.test(v) || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v), {
@@ -78,6 +78,28 @@ function AuthTabs({ mode }: { mode: "login" | "register" }) {
   );
 }
 
+const getInitialReferral = () => {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  const ref =
+    params.get("ref") ||
+    params.get("referral") ||
+    params.get("code") ||
+    params.get("invite") ||
+    params.get("r");
+  if (ref) {
+    try {
+      sessionStorage.setItem("velvato_ref", ref);
+    } catch {}
+    return ref;
+  }
+  try {
+    return sessionStorage.getItem("velvato_ref") || "";
+  } catch {
+    return "";
+  }
+};
+
 export function AuthScreen({ mode }: { mode: "login" | "register" }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -93,12 +115,10 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
       password: "",
       confirm: "",
       withdrawPassword: "",
-      referral:
-        typeof window !== "undefined"
-          ? (new URLSearchParams(window.location.search).get("ref") ?? "")
-          : "",
+      referral: getInitialReferral(),
     },
   });
+
 
 
   const doLogin = async (v: z.infer<typeof loginSchema>) => {
@@ -118,6 +138,7 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
       return;
     }
     toast.success("Welcome back!");
+    trackMetaSubscribe({ method: "login" });
     trackMetaEvent("Login", { method: "password" });
     navigate({ to: "/home", replace: true });
   };
@@ -127,11 +148,11 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
 
     // Use our custom RPC to bypass GoTrue email rate limits completely
     // The RPC now returns the exact email it stored so we can sign in with it
-    const { data: rpcData, error: rpcError } = await supabase.rpc("custom_register", {
+    const { data: rpcData, error: rpcError } = await (supabase.rpc as any)("custom_register", {
       p_phone: v.phone,
       p_password: v.password,
       p_withdraw_password: v.withdrawPassword,
-      p_referral: (v.referral ?? "").toUpperCase()
+      p_referral: (v.referral ?? "").toUpperCase(),
     });
 
     if (rpcError) {
@@ -161,6 +182,7 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
     }
 
     toast.success("Account created! Welcome to Velvato.");
+    trackMetaSubscribe({ method: "register" });
     trackMetaEvent("CompleteRegistration", { status: "success", method: "password" });
     navigate({ to: "/home", replace: true });
   };
@@ -212,7 +234,14 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
                       Forgot password?
                     </Link>
                   </div>
-                  <PrimaryButton type="submit" loading={loading} className="mt-2">
+                  <PrimaryButton
+                    type="submit"
+                    loading={loading}
+                    className="mt-2"
+                    onClick={() => {
+                      trackMetaSubscribe({ action: "login_button_click" });
+                    }}
+                  >
                     LOGIN
                   </PrimaryButton>
                   <p className="text-center text-[13px] text-muted-foreground">
@@ -261,10 +290,7 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
                     loading={loading}
                     className="mt-2"
                     onClick={() => {
-                      (window as Window & { fbq?: (...args: unknown[]) => void }).fbq?.(
-                        "track",
-                        "Subscribe",
-                      );
+                      trackMetaSubscribe({ action: "register_button_click" });
                     }}
                   >
                     REGISTER

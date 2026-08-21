@@ -136,6 +136,8 @@
   html {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
   }
 
   body {
@@ -143,6 +145,15 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+    touch-action: manipulation;
+  }
+
+  /* GPU acceleration for motion components and smooth scrolling */
+  img, svg, button, a {
+    -webkit-touch-callout: none;
   }
 }
 
@@ -168,3 +179,4 @@
     display: none;
   }
 }
+
