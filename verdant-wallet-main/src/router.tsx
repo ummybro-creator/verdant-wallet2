@@ -23,8 +23,10 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
-    // Preload on hover/focus for instant navigation feel
-    defaultPreload: "intent",
+    // "viewport" preloads any route whose <Link> is visible on screen —
+    // critical for mobile users (Meta Ads traffic) who never hover.
+    // Previously "intent" (hover-only) meant zero preloading on mobile.
+    defaultPreload: "viewport",
     defaultPreloadStaleTime: 30_000,
   });
 

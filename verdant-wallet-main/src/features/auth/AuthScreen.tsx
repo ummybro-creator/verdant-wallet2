@@ -219,8 +219,9 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
             alt="Velvato ice cream promotional banner"
             width={1200}
             height={640}
+            // LCP element — highest fetch priority so browser downloads it immediately
             fetchPriority="high"
-            decoding="async"
+            decoding="sync"
             className="h-[180px] w-full object-cover sm:h-[210px]"
           />
           <div className="relative rounded-t-[32px] bg-card pt-[64px]">

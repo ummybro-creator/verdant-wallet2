@@ -54,8 +54,10 @@ function BannerSlider() {
           exit={{ opacity: 0 }}
           width={1200}
           height={675}
-          fetchPriority="high"
-          decoding="async"
+          // First slide is the LCP element — highest priority.
+          // Subsequent slides are below-fold at load time — defer to save bandwidth.
+          fetchPriority={index === 0 ? "high" : "low"}
+          decoding={index === 0 ? "sync" : "async"}
           transition={{ duration: 0.45 }}
           className="aspect-[16/9] w-full object-cover"
         />

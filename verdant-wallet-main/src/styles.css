@@ -155,6 +155,21 @@
   img, svg, button, a {
     -webkit-touch-callout: none;
   }
+
+  /* ── Performance: promote animated/interactive elements to their own GPU layer ── */
+  /* This prevents layout thrashing when motion.div animates next to static content */
+  [data-motion], .motion-safe\:will-change-transform {
+    will-change: transform;
+  }
+
+  /* ── Performance: font-display swap ─────────────────────────────────────────── */
+  /* Ensures text is always visible immediately using the system font fallback,    */
+  /* then swaps to Inter once the async font stylesheet finishes loading.          */
+  @font-face {
+    font-family: "Inter";
+    font-display: swap;
+    src: local("Inter");
+  }
 }
 
 @utility gradient-primary {
