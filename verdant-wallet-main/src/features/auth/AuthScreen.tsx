@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -104,6 +104,15 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
+  // If the user already has an active session, auto-redirect directly to home
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session) {
+        navigate({ to: "/home", replace: true });
+      }
+    });
+  }, [navigate]);
+
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: { phone: "", password: "" },
@@ -118,8 +127,6 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
       referral: getInitialReferral(),
     },
   });
-
-
 
   const doLogin = async (v: z.infer<typeof loginSchema>) => {
     setLoading(true);
@@ -140,14 +147,14 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
     toast.success("Welcome back!");
     trackMetaSubscribe({ method: "login" });
     trackMetaEvent("Login", { method: "password" });
-    navigate({ to: "/home", replace: true });
+    window.location.href = "/home";
   };
 
   const doRegister = async (v: z.infer<typeof registerSchema>) => {
     setLoading(true);
 
     // Use our custom RPC to bypass GoTrue email rate limits completely
-    // The RPC now returns the exact email it stored so we can sign in with it
+    // The RPC returns the exact email it stored so we can sign in with it immediately
     const { data: rpcData, error: rpcError } = await (supabase.rpc as any)("custom_register", {
       p_phone: v.phone,
       p_password: v.password,
@@ -165,26 +172,42 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
       return;
     }
 
-    // Use the exact email returned by the RPC to avoid any domain mismatch
+    // Use the exact email returned by the RPC
     const registeredEmail = (rpcData as string) || phoneToEmail(v.phone);
 
-    // Now sign in the newly registered user
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: registeredEmail,
-      password: v.password,
-    });
+    // Automatically authenticate the newly registered user (with retry if needed)
+    let authenticated = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: registeredEmail,
+        password: v.password,
+      });
+
+      if (!signInError && signInData?.session) {
+        authenticated = true;
+        break;
+      }
+
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    }
 
     setLoading(false);
-    if (signInError || !signInData.session) {
-      toast.success("Account created! Please sign in.");
+
+    if (!authenticated) {
+      toast.error("Account created! Please sign in.");
       navigate({ to: "/auth/login", replace: true });
       return;
     }
 
+    // Track successful registration and subscription events
     toast.success("Account created! Welcome to Velvato.");
     trackMetaSubscribe({ method: "register" });
     trackMetaEvent("CompleteRegistration", { status: "success", method: "password" });
-    navigate({ to: "/home", replace: true });
+
+    // Automatically redirect directly to home screen without requiring another login
+    window.location.href = "/home";
   };
 
   return (
