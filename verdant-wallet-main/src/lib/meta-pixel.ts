@@ -1,6 +1,6 @@
 // ─── Meta Pixel ────────────────────────────────────────────────────────────
-// Pixel ID: 1284378021424877  (updated Aug 2026)
-export const META_PIXEL_ID = "1284378021424877";
+// Pixel ID: 1076043171806461  (updated Aug 2026)
+export const META_PIXEL_ID = "1076043171806461";
 
 type MetaEventParams = Record<string, string | number | boolean | undefined>;
 
