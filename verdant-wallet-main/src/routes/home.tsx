@@ -91,7 +91,7 @@ function HomePage() {
         <BannerSlider />
 
         <Card className="flex items-center justify-between gap-3 px-4 py-3">
-          <span className="text-[13px] font-bold text-foreground">Daily income - Daily Withdraw offer ends in !!</span>
+          <span className="text-[13px] font-bold text-foreground">Limited-time offer ends in !!</span>
           <Countdown target={Date.now() + 1000 * 60 * 60 * 8} />
         </Card>
 
