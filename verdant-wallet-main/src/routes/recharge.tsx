@@ -47,12 +47,13 @@ function RechargePage() {
       toast.error(`Minimum recharge is ${INR(min)}`);
       return;
     }
-
-    trackMetaEvent("InitiateCheckout", {
-      content_category: "wallet_recharge",
-      content_name: "Velvato wallet recharge",
-      currency: "INR",
-      value,
+    import("@/lib/meta-pixel").then(({ trackMetaCustomEvent }) => {
+      trackMetaCustomEvent("Recharge", {
+        content_category: "wallet_recharge",
+        content_name: "Velvato wallet recharge",
+        currency: "INR",
+        value,
+      });
     });
 
     setLoading(true);

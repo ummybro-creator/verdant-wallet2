@@ -138,23 +138,11 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
-        {/* Meta Pixel — must stay inline in <head> for earliest possible firing.
-            NOTE: This script already calls fbq('init', ...) and fbq('track', 'PageView').
-            Do NOT call initMetaPixel() again in RootComponent — it would double-fire. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','1076043171806461');fbq('track','PageView');`,
+            __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');`,
           }}
         />
-        <noscript>
-          <img
-            height="1"
-            width="1"
-            style={{ display: "none" }}
-            src="https://www.facebook.com/tr?id=1076043171806461&ev=PageView&noscript=1"
-            alt=""
-          />
-        </noscript>
       </head>
       <body>
         {children}
@@ -189,12 +177,6 @@ function RootComponent() {
 
   useEffect(() => {
     // Track PageView on every client-side navigation (SPA route changes).
-    // Skip the very first invocation — the inline Meta Pixel script in RootShell
-    // already fired PageView on the initial page load.
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
     trackMetaEvent("PageView");
   }, [location.pathname, location.searchStr]);
 

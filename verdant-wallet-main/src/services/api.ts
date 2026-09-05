@@ -35,6 +35,7 @@ export type Profile = {
   ifsc: string | null;
   upi_id: string | null;
   blocked: boolean;
+  meta_pixel_id?: string | null;
   created_at: string;
 };
 
@@ -279,6 +280,31 @@ export function useDeposits() {
           .order("created_at", { ascending: false })
           .limit(50);
         if (error) throw error;
+        
+        // Track completed recharges
+        if (data && typeof window !== "undefined") {
+          import("@/lib/meta-pixel").then(({ trackMetaCustomEvent }) => {
+            const tracked = JSON.parse(localStorage.getItem("velvato_tracked_deposits") || "{}");
+            let hasNew = false;
+            
+            data.forEach((d) => {
+              if (d.status === "success" && !tracked[d.id]) {
+                trackMetaCustomEvent("CompleteRecharge", {
+                  content_category: "wallet_recharge",
+                  currency: "INR",
+                  value: d.amount
+                });
+                tracked[d.id] = true;
+                hasNew = true;
+              }
+            });
+            
+            if (hasNew) {
+              localStorage.setItem("velvato_tracked_deposits", JSON.stringify(tracked));
+            }
+          });
+        }
+
         return (data ?? []) as never;
       },
       !!userId,
