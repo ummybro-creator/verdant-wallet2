@@ -283,13 +283,13 @@ export function useDeposits() {
         
         // Track completed recharges
         if (data && typeof window !== "undefined") {
-          import("@/lib/meta-pixel").then(({ trackMetaCustomEvent }) => {
+          import("@/lib/meta-pixel").then(({ trackMetaEvent }) => {
             const tracked = JSON.parse(localStorage.getItem("velvato_tracked_deposits") || "{}");
             let hasNew = false;
             
             data.forEach((d) => {
               if (d.status === "success" && !tracked[d.id]) {
-                trackMetaCustomEvent("CompleteRecharge", {
+                trackMetaEvent("Purchase", {
                   content_category: "wallet_recharge",
                   currency: "INR",
                   value: d.amount

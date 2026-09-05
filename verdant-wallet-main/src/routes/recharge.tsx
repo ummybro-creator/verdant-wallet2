@@ -47,8 +47,9 @@ function RechargePage() {
       toast.error(`Minimum recharge is ${INR(min)}`);
       return;
     }
-    import("@/lib/meta-pixel").then(({ trackMetaCustomEvent }) => {
-      trackMetaCustomEvent("Recharge", {
+    
+    import("@/lib/meta-pixel").then(({ trackMetaEvent }) => {
+      trackMetaEvent("InitiateCheckout", {
         content_category: "wallet_recharge",
         content_name: "Velvato wallet recharge",
         currency: "INR",
