@@ -12,14 +12,16 @@ import { EmptyState } from "@/components/ui-kit/Skeleton";
 import { useProfile, useSettings, useDeposits, fmtDate } from "@/services/api";
 import { INR } from "@/utils/format";
 import { cn } from "@/lib/utils";
-import { trackMetaEvent } from "@/lib/meta-pixel";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/recharge")({
   head: () => ({
     meta: [
       { title: "Recharge your Velvato wallet" },
-      { name: "description", content: "Add funds to your Velvato wallet via UPI or bank transfer." },
+      {
+        name: "description",
+        content: "Add funds to your Velvato wallet via UPI or bank transfer.",
+      },
       { property: "og:title", content: "Recharge your Velvato wallet" },
       { property: "og:description", content: "Fast, secure wallet top-ups in seconds." },
     ],
@@ -27,19 +29,47 @@ export const Route = createFileRoute("/recharge")({
   component: RechargePage,
 });
 
-const methods = [
-  { id: "upi", label: "UPI", icon: Smartphone, hint: "Instant · 0% fee" },
-];
+const GATEWAYS = [
+  { id: "rspay", label: "UPI (RS Pay)", hint: "Instant · 0% fee", icon: Smartphone },
+  { id: "watchpay", label: "UPI (WatchPay)", hint: "Instant · 0% fee", icon: Smartphone },
+] as const;
+
+type GatewayId = (typeof GATEWAYS)[number]["id"];
 
 function RechargePage() {
   const { data: profile } = useProfile();
   const { data: settings } = useSettings();
   const { data: deposits } = useDeposits();
   const [loading, setLoading] = useState(false);
+  const [gateway, setGateway] = useState<GatewayId>("rspay");
 
   const presets = useMemo(() => settings?.recharge_presets ?? [], [settings]);
   const min = settings?.min_recharge ?? 0;
   const [amount, setAmount] = useState("");
+
+  const callGateway = async (gw: GatewayId, value: number, token: string): Promise<string> => {
+    const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
+    const apikey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string;
+    const fnName = gw === "watchpay" ? "watchpay-payin" : "rspay-payin";
+
+    const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        apikey,
+      },
+      body: JSON.stringify({ amount: value }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || `${fnName} failed`);
+    }
+
+    return data.payment_url as string;
+  };
 
   const proceed = async () => {
     const value = Number(amount) || 0;
@@ -47,7 +77,7 @@ function RechargePage() {
       toast.error(`Minimum recharge is ${INR(min)}`);
       return;
     }
-    
+
     import("@/lib/meta-pixel").then(({ trackMetaEvent }) => {
       trackMetaEvent("InitiateCheckout", {
         content_category: "wallet_recharge",
@@ -59,7 +89,6 @@ function RechargePage() {
 
     setLoading(true);
     try {
-      // Get the current session token to authenticate the Edge Function call
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) {
@@ -67,26 +96,30 @@ function RechargePage() {
         return;
       }
 
-      const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
-      const res = await fetch(`${supabaseUrl}/functions/v1/watchpay-payin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string,
-        },
-        body: JSON.stringify({ amount: value }),
-      });
+      let paymentUrl: string | null = null;
+      let usedGateway = gateway;
 
-      const data = await res.json();
+      // Try the selected gateway first
+      try {
+        paymentUrl = await callGateway(gateway, value, token);
+      } catch (primaryErr) {
+        console.warn(`[recharge] Primary gateway (${gateway}) failed:`, primaryErr);
+        toast.info("Switching to backup payment gateway…");
 
-      if (!res.ok || !data.success) {
-        toast.error(data.error || "Could not initiate payment. Please try again.");
-        return;
+        // Auto-fallback to the other gateway
+        const fallback: GatewayId = gateway === "watchpay" ? "rspay" : "watchpay";
+        try {
+          paymentUrl = await callGateway(fallback, value, token);
+          usedGateway = fallback;
+        } catch (fallbackErr) {
+          console.error("[recharge] Fallback gateway also failed:", fallbackErr);
+          toast.error("Payment service is temporarily unavailable. Please try again shortly.");
+          return;
+        }
       }
 
-      // Redirect to WatchPay payment page in the same tab to avoid mobile popup blockers
-      window.location.href = data.payment_url;
+      console.log(`[recharge] Redirecting via ${usedGateway}:`, paymentUrl);
+      window.location.href = paymentUrl!;
     } catch (err) {
       console.error("[recharge] Payment initiation failed:", err);
       toast.error("Something went wrong. Please try again.");
@@ -135,28 +168,34 @@ function RechargePage() {
 
         <Card className="space-y-2.5 p-4">
           <SectionTitle>Payment method</SectionTitle>
-          {methods.map((m) => (
+          {GATEWAYS.map((gw) => (
             <button
-              key={m.id}
+              key={gw.id}
               type="button"
+              onClick={() => setGateway(gw.id)}
               className={cn(
-                "flex w-full items-center gap-4 rounded-2xl border border-border p-4 text-left",
-                "border-primary bg-primary-soft",
+                "flex w-full items-center gap-4 rounded-2xl border border-border p-4 text-left transition-colors",
+                gateway === gw.id
+                  ? "border-primary bg-primary-soft"
+                  : "bg-card hover:bg-muted/50",
               )}
             >
-              <m.icon className="size-6 text-primary" />
+              <gw.icon className="size-6 text-primary" />
               <span className="flex-1">
-                <span className="block font-bold text-foreground">{m.label}</span>
-                <span className="block text-sm text-muted-foreground">{m.hint}</span>
+                <span className="block font-bold text-foreground">{gw.label}</span>
+                <span className="block text-sm text-muted-foreground">{gw.hint}</span>
               </span>
               <span
                 className={cn(
-                  "size-5 rounded-full border-2 border-border",
-                  "border-primary bg-primary",
+                  "size-5 rounded-full border-2",
+                  gateway === gw.id ? "border-primary bg-primary" : "border-border",
                 )}
               />
             </button>
           ))}
+          <p className="text-xs text-muted-foreground pt-1">
+            If one gateway is down, the other is used automatically.
+          </p>
         </Card>
 
         <Card className="p-4">
@@ -186,7 +225,14 @@ function RechargePage() {
           {loading ? (
             <span className="flex items-center gap-2">
               <svg className="size-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
               Processing…
