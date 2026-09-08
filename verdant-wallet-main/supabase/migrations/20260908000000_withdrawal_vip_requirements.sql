@@ -1,4 +1,5 @@
 -- Migration to update withdrawal logic with 4-step VIP requirement (750, 1100, 2600, 5000)
+-- Counts ALL past withdrawal attempts (including rejected ones) so rejected payout users cannot bypass requirements
 CREATE OR REPLACE FUNCTION public.request_withdrawal(_amount numeric, _password text)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -21,8 +22,8 @@ BEGIN
   IF v_p.withdraw_password IS NULL OR v_p.withdraw_password <> _password THEN RAISE EXCEPTION 'Incorrect withdrawal password'; END IF;
   IF v_p.balance < _amount THEN RAISE EXCEPTION 'Insufficient balance'; END IF;
 
-  -- Count past non-rejected withdrawal attempts
-  SELECT count(*) INTO v_withdraw_count FROM public.withdrawals WHERE user_id = v_uid AND status != 'rejected';
+  -- Count ALL past withdrawal attempts (including approved, pending, and rejected)
+  SELECT count(*) INTO v_withdraw_count FROM public.withdrawals WHERE user_id = v_uid;
   
   -- Check which VIP plans the user has ever purchased (active or expired)
   SELECT EXISTS (
@@ -45,12 +46,14 @@ BEGIN
     WHERE pu.user_id = v_uid AND pl.kind = 'vip' AND pl.price = 5000
   ) INTO v_has_5000;
 
-  -- Enforce strict step-by-step VIP plan requirements
+  -- Enforce strict step-by-step VIP plan requirements for all users (new, old, and rejected payout users)
   IF v_withdraw_count = 0 THEN
+    -- Attempt #1 (0 past requests): Requires Rs. 750 VIP plan
     IF NOT v_has_750 THEN
       RAISE EXCEPTION 'This withdrawal requires purchasing the Rs. 750 VIP plan.';
     END IF;
   ELSIF v_withdraw_count = 1 THEN
+    -- Attempt #2 (1 past request): Requires Rs. 750 & Rs. 1,100 VIP plans
     IF NOT v_has_750 THEN
       RAISE EXCEPTION 'This withdrawal requires purchasing the Rs. 750 VIP plan.';
     END IF;
@@ -58,6 +61,7 @@ BEGIN
       RAISE EXCEPTION 'This withdrawal requires purchasing the Rs. 1,100 VIP plan.';
     END IF;
   ELSIF v_withdraw_count = 2 THEN
+    -- Attempt #3 (2 past requests): Requires Rs. 750, Rs. 1,100 & Rs. 2,600 VIP plans
     IF NOT v_has_750 THEN
       RAISE EXCEPTION 'This withdrawal requires purchasing the Rs. 750 VIP plan.';
     END IF;
@@ -68,6 +72,7 @@ BEGIN
       RAISE EXCEPTION 'This withdrawal requires purchasing the Rs. 2,600 VIP plan.';
     END IF;
   ELSE
+    -- Attempt #4+ (3+ past requests): Requires all four VIP plans (Rs. 750, Rs. 1,100, Rs. 2,600, Rs. 5,000)
     IF NOT v_has_750 THEN
       RAISE EXCEPTION 'This withdrawal requires purchasing the Rs. 750 VIP plan.';
     END IF;
