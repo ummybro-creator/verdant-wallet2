@@ -21,7 +21,7 @@ export const Route = createFileRoute("/profile/about")({
         },
         {
           heading: "How it works",
-          body: "Recharge your wallet, activate a daily income or VIP plan, and receive automatic credits every day at 09:00 IST.",
+          body: "Recharge your wallet, activate a daily income or VIP plan, and receive automatic credits every day after 12:00 AM (midnight) IST.",
         },
         {
           heading: "Support",

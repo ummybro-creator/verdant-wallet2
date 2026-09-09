@@ -133,7 +133,7 @@ function ProductDetail() {
         <Card className="space-y-2.5 p-4">
           <SectionTitle>Benefits</SectionTitle>
           <ul className="space-y-2 text-[13px] text-muted-foreground">
-            <li>• Daily income credited automatically at 09:00 IST</li>
+            <li>• Daily income credited automatically after 12:00 AM (midnight) IST</li>
             <li>• Withdrawals to your linked bank account</li>
             <li>• Team commission on level 1 purchases</li>
           </ul>
@@ -156,7 +156,7 @@ function ProductDetail() {
             <AccordionItem value="1">
               <AccordionTrigger>When is my first income credited?</AccordionTrigger>
               <AccordionContent>
-                24 hours after purchase, then every day at 09:00 IST.
+                Daily earnings are credited every day after 12:00 AM (midnight) IST, starting from the day following your purchase.
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="2">
