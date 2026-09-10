@@ -307,6 +307,23 @@ function Dashboard() {
     },
   });
 
+  const [runningEarnings, setRunningEarnings] = useState(false);
+  const handleProcessEarnings = async () => {
+    setRunningEarnings(true);
+    try {
+      const { error } = await supabase.rpc("process_daily_earnings");
+      if (error) {
+        toast.error("Failed to process daily earnings: " + error.message);
+      } else {
+        toast.success("Daily earnings processed successfully for all eligible plans!");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Error running daily earnings");
+    } finally {
+      setRunningEarnings(false);
+    }
+  };
+
   if (isLoading) return <Loading />;
   const cards = [
     { label: "Total users", value: String(data?.users ?? 0) },
@@ -322,9 +339,20 @@ function Dashboard() {
 
   return (
     <>
-      <SectionTitle className="flex items-center gap-2">
-        <LayoutDashboard className="size-5 text-primary" /> Overview
-      </SectionTitle>
+      <div className="flex items-center justify-between">
+        <SectionTitle className="flex items-center gap-2">
+          <LayoutDashboard className="size-5 text-primary" /> Overview
+        </SectionTitle>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleProcessEarnings}
+          disabled={runningEarnings}
+          className="text-xs font-bold"
+        >
+          {runningEarnings ? "Processing..." : "Trigger daily earnings"}
+        </Button>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         {cards.map((c, i) => (
           <Card key={c.label} delay={i * 0.03} className="p-4">
