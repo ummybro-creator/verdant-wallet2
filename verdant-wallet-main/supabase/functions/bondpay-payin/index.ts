@@ -1,22 +1,19 @@
-// Supabase Edge Function: watchpay-payin
-// Creates a WatchPay payment order (Payin API) with proper MD5 signature.
-// Called from the client recharge page; keeps the API key server-side.
+// Supabase Edge Function: bondpay-payin
+// Creates a BondPay payment order (Payin API) with MD5 signature.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import md5 from "npm:md5";
 
-const WATCHPAY_ENDPOINT = "https://api.watchpays.com/v1/create";
-const MERCHANT_ID = "100555450";
-const API_KEY = "ecdc22888b6ce064a4bc3fa9739e31d0";
+const BONDPAY_ENDPOINT = "https://api.bond-payss.com/v1/create";
+const MERCHANT_ID = "100888308";
+const API_KEY = "8debe25c62f9c3a57a658bb132697393";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-import md5 from "npm:md5";
-
-// We use the npm:md5 package which works flawlessly in Deno Deploy / Supabase Edge Functions.
 async function hashMd5(message: string): Promise<string> {
   return md5(message);
 }
@@ -26,17 +23,15 @@ function generateOrderNo(): string {
   const rand = Math.floor(Math.random() * 10000)
     .toString()
     .padStart(4, "0");
-  return `VLT${ts}${rand}`;
+  return `BOND${ts}${rand}`;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Authenticate the caller
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
@@ -62,7 +57,6 @@ serve(async (req) => {
       });
     }
 
-    // Parse request body
     const body = await req.json();
     const amount = Number(body.amount);
     if (!amount || amount <= 0) {
@@ -72,55 +66,41 @@ serve(async (req) => {
       });
     }
 
-    // Determine callback URL (WatchPay will POST here on payment success)
-    const siteUrl = Deno.env.get("SITE_URL") || "https://xihslaahlgvlggolkbqh.supabase.co";
-    const callbackUrl = `${siteUrl}/functions/v1/watchpay-callback`;
-    const returnUrl = "https://verdant-ice2.vercel.app/";
-
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const callbackUrl = `${supabaseUrl}/functions/v1/bondpay-callback`;
     const amountStr = amount.toFixed(2);
     const merchantOrderNo = generateOrderNo();
 
-    // Build signature per WatchPay spec:
-    // Step 1-3: Collect params, remove empty, sort alphabetically
-    const params: Record<string, string> = {
-      amount: amountStr,
-      callback_url: callbackUrl,
-      merchant_id: MERCHANT_ID,
-      merchant_order_no: merchantOrderNo,
-    };
-    const sortedKeys = Object.keys(params).sort();
-
-    // Step 4-5: Build string & append key
-    let signStr = sortedKeys.map((k) => `${k}=${params[k]}`).join("&");
-    signStr += `&key=${API_KEY}`;
-
-    // Step 6: MD5 hash
+    // BondPay Signature Formula:
+    // md5( merchant_id + amount + merchant_order_no + api_key + callback_url )
+    const signStr = `${MERCHANT_ID}${amountStr}${merchantOrderNo}${API_KEY}${callbackUrl}`;
     const signature = await hashMd5(signStr);
 
-    // Call WatchPay API
     const payload = {
       merchant_id: MERCHANT_ID,
       api_key: API_KEY,
       amount: amountStr,
       merchant_order_no: merchantOrderNo,
       callback_url: callbackUrl,
-      return_url: returnUrl,
-      extra: user.id, // store user id for callback processing
+      extra: "0",
       signature,
     };
 
-    const wpRes = await fetch(WATCHPAY_ENDPOINT, {
+    console.log("[bondpay-payin] Sending request payload:", JSON.stringify(payload));
+
+    const bpRes = await fetch(BONDPAY_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    const wpData = await wpRes.json();
+    const bpData = await bpRes.json();
+    console.log("[bondpay-payin] API response:", JSON.stringify(bpData));
 
-    if (!wpRes.ok || !wpData.success) {
-      console.error("[watchpay-payin] API error:", wpData);
+    if (!bpRes.ok || !bpData.success || !bpData.payment_url) {
+      console.error("[bondpay-payin] API error:", bpData);
       return new Response(
-        JSON.stringify({ error: wpData.message || "WatchPay order creation failed" }),
+        JSON.stringify({ error: bpData.message || "BondPay order creation failed" }),
         {
           status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -128,7 +108,6 @@ serve(async (req) => {
       );
     }
 
-    // Persist the pending payment_request in the DB so we can reconcile on callback
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -137,16 +116,16 @@ serve(async (req) => {
       user_id: user.id,
       amount,
       merchant_order_no: merchantOrderNo,
-      gateway_order_no: wpData.order_no ?? null,
+      gateway_order_no: bpData.order_no ?? null,
       status: "pending",
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        payment_url: wpData.payment_url,
+        payment_url: bpData.payment_url,
         merchant_order_no: merchantOrderNo,
-        order_no: wpData.order_no,
+        order_no: bpData.order_no,
         amount: amountStr,
       }),
       {
@@ -155,7 +134,7 @@ serve(async (req) => {
       },
     );
   } catch (err) {
-    console.error("[watchpay-payin] Unexpected error:", err);
+    console.error("[bondpay-payin] Unexpected error:", err);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

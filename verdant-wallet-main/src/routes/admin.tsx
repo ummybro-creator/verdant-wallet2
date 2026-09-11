@@ -221,7 +221,7 @@ function ActivityLog() {
       <p className="text-xs leading-5 text-muted-foreground">
         Registration time comes from the existing profile record. A payment session is created
         when a logged-in user initiates a{" "}
-        <span className="font-bold text-foreground">WatchPay order</span>{" "}
+        <span className="font-bold text-foreground">payment order</span>{" "}
         from the Recharge page.
       </p>
 

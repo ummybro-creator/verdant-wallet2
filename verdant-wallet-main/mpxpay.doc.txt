@@ -1,0 +1,98 @@
+Introduction
+The MPXPays Payin API lets you create payment orders from your backend server. All requests require an MD5 signature computed server-side. On success you receive a url to redirect your customer to complete payment. When payment is confirmed, MPXPays fires a POST callback to your callback_url.
+
+
+Merchant ID: 953010
+Payment API Key: cf32923f2dae716bd29030025410149b7ed017b01e182c1aadcbb8f97c21a305
+
+
+PayIn Endpoint
+API Endpoint
+POST
+https://api.mpxpays.com/api/payIn
+Content-Type: application/json
+Request Parameters
+Send as a JSON body in the POST request.
+
+Field	Type	Required	Description
+merchant_id	string	Yes	Your unique merchant ID (provided by MPXPays).
+api_key	string	Yes	Your Payin API key — from the Dashboard.
+amount	decimal	Yes	Payment amount in INR (e.g. 500.00). Must be > 0.
+merchant_order_no	string	Yes	Your unique order reference. Duplicates are rejected.
+callback_url	string	Yes	Your server URL to receive payment status notifications.
+signature	string	Yes	MD5 hash — see Signature Logic below.
+currency	string	No	Currency code. Defaults to "INR" if not sent.
+Signature Logic
+Computed server-side only. Never generate on the client.
+
+Formula (concatenate in this exact order)
+
+MD5(api_key + amount + callback_url + merchant_id + merchant_order_no)
+⚠ amount must be formatted to exactly 2 decimal places before hashing (e.g. 500.00)
+
+// Node.js Example
+const crypto = require('crypto');
+
+const signString = apiKey + amount.toFixed(2) + callbackUrl + merchantId + merchantOrderNo;
+const signature = crypto.createHash('md5').update(signString).digest('hex');
+PayIn Example Request
+JSON body sent via HTTP POST to /api/payIn.
+
+{
+  "merchant_id":       "953001",
+  "api_key":           "c0806fe9ff2888463ccca695d757c1700ccafce85d6aa905da31446c239b1219",
+  "amount":            500.00,
+  "merchant_order_no": "ORD-2024-0077",
+  "callback_url":      "https://yoursite.com/payment/callback",
+  "currency":          "INR",
+  "signature":         "d41d8cd98f00b204e9800998ecf8427e"
+}
+Signature is computed as: MD5("c0806fe9..." + "500.00" + "https://yoursite.com/payment/callback" + "953001" + "ORD-2024-0077")
+
+PayIn API Response
+Redirect your user to the url on success.
+
+200 Success
+{
+  "status":            1,
+  "message":           "Order created successfully",
+  "platform_order_no": "MPX202608220541292670",
+  "merchant_order_no": "ORD-2024-0077",
+  "amount":            "500.00",
+  "url":               "https://pay.mpxpays.com/payment/MPX202608220541292670"
+}
+Redirect your customer to url to complete the payment.
+
+Error Responses
+{
+  "status": 0,
+  "message": "Invalid signature"
+}
+
+// Other error responses:
+{ "status": 0, "message": "Missing required parameters" }
+{ "status": 0, "message": "Invalid or inactive merchant credentials" }
+{ "status": 0, "message": "Duplicate merchant_order_no" }
+PayIn Callback Response
+MPXPays sends a POST JSON to your callback_url after payment is confirmed.
+
+{
+  "status":            "success",
+  "amount":            "500.00",
+  "final_amount":      "452.00",
+  "platform_order_no": "MPX202608220541292670",
+  "merchant_order_no": "ORD-2024-0077",
+  "utr":               "412200988712"
+}
+status
+Payment result: success / failed
+amount
+Original gross transaction amount
+final_amount
+Net amount credited to balance after fee
+platform_order_no
+MPXPays platform order reference
+merchant_order_no
+Your original order reference
+utr
+Bank UTR / reference number for payment

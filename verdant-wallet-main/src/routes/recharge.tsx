@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Lock, Coins, Zap, Smartphone } from "lucide-react";
+import { Lock, Coins, Zap, Smartphone, X, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { MobileShell } from "@/components/layout/MobileShell";
 import { Header } from "@/components/layout/Header";
@@ -20,7 +20,7 @@ export const Route = createFileRoute("/recharge")({
       { title: "Recharge your Velvato wallet" },
       {
         name: "description",
-        content: "Add funds to your Velvato wallet via UPI or bank transfer.",
+        content: "Add funds to your Velvato wallet via Bond Pay or MPX Pay.",
       },
       { property: "og:title", content: "Recharge your Velvato wallet" },
       { property: "og:description", content: "Fast, secure wallet top-ups in seconds." },
@@ -29,28 +29,42 @@ export const Route = createFileRoute("/recharge")({
   component: RechargePage,
 });
 
-const GATEWAYS = [
-  { id: "rspay", label: "UPI (RS Pay)", hint: "Instant · 0% fee", icon: Smartphone },
-  { id: "watchpay", label: "UPI (WatchPay)", hint: "Instant · 0% fee", icon: Smartphone },
+const CHANNELS = [
+  {
+    id: "bondpay",
+    name: "CHANNEL - 1",
+    label: "Bond Pay (Default)",
+    hint: "Instant UPI · 0% Fee",
+    icon: Smartphone,
+  },
+  {
+    id: "mpxpay",
+    name: "CHANNEL - 2",
+    label: "MPX Pay",
+    hint: "Fast & Secure UPI · 0% Fee",
+    icon: Smartphone,
+  },
 ] as const;
 
-type GatewayId = (typeof GATEWAYS)[number]["id"];
+type ChannelId = (typeof CHANNELS)[number]["id"];
 
 function RechargePage() {
   const { data: profile } = useProfile();
   const { data: settings } = useSettings();
   const { data: deposits } = useDeposits();
+
   const [loading, setLoading] = useState(false);
-  const [gateway, setGateway] = useState<GatewayId>("rspay");
+  const [showModal, setShowModal] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState<ChannelId>("bondpay");
 
   const presets = useMemo(() => settings?.recharge_presets ?? [], [settings]);
   const min = settings?.min_recharge ?? 0;
   const [amount, setAmount] = useState("");
 
-  const callGateway = async (gw: GatewayId, value: number, token: string): Promise<string> => {
+  const callGateway = async (gw: ChannelId, value: number, token: string): Promise<string> => {
     const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
     const apikey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string;
-    const fnName = gw === "watchpay" ? "watchpay-payin" : "rspay-payin";
+    const fnName = gw === "bondpay" ? "bondpay-payin" : "mpxpay-payin";
 
     const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
       method: "POST",
@@ -64,14 +78,23 @@ function RechargePage() {
 
     const data = await res.json();
 
-    if (!res.ok || !data.success) {
+    if (!res.ok || !data.success || !data.payment_url) {
       throw new Error(data.error || `${fnName} failed`);
     }
 
     return data.payment_url as string;
   };
 
-  const proceed = async () => {
+  const handleOpenModal = () => {
+    const value = Number(amount) || 0;
+    if (value < min) {
+      toast.error(`Minimum recharge is ${INR(min)}`);
+      return;
+    }
+    setShowModal(true);
+  };
+
+  const proceedPayment = async () => {
     const value = Number(amount) || 0;
     if (value < min) {
       toast.error(`Minimum recharge is ${INR(min)}`);
@@ -93,27 +116,29 @@ function RechargePage() {
       const token = sessionData?.session?.access_token;
       if (!token) {
         toast.error("Please log in to recharge.");
+        setLoading(false);
         return;
       }
 
       let paymentUrl: string | null = null;
-      let usedGateway = gateway;
+      let usedGateway = selectedChannel;
 
-      // Try the selected gateway first
+      // Try the selected channel first
       try {
-        paymentUrl = await callGateway(gateway, value, token);
+        paymentUrl = await callGateway(selectedChannel, value, token);
       } catch (primaryErr) {
-        console.warn(`[recharge] Primary gateway (${gateway}) failed:`, primaryErr);
-        toast.info("Switching to backup payment gateway…");
+        console.warn(`[recharge] Primary channel (${selectedChannel}) failed:`, primaryErr);
+        toast.info("Switching to backup payment channel…");
 
-        // Auto-fallback to the other gateway
-        const fallback: GatewayId = gateway === "watchpay" ? "rspay" : "watchpay";
+        // Auto-fallback to the other channel
+        const fallback: ChannelId = selectedChannel === "bondpay" ? "mpxpay" : "bondpay";
         try {
           paymentUrl = await callGateway(fallback, value, token);
           usedGateway = fallback;
         } catch (fallbackErr) {
-          console.error("[recharge] Fallback gateway also failed:", fallbackErr);
+          console.error("[recharge] Fallback channel also failed:", fallbackErr);
           toast.error("Payment service is temporarily unavailable. Please try again shortly.");
+          setLoading(false);
           return;
         }
       }
@@ -123,7 +148,6 @@ function RechargePage() {
     } catch (err) {
       console.error("[recharge] Payment initiation failed:", err);
       toast.error("Something went wrong. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -166,38 +190,6 @@ function RechargePage() {
           <AmountInput value={amount} onChange={setAmount} currency="₹" />
         </Card>
 
-        <Card className="space-y-2.5 p-4">
-          <SectionTitle>Payment method</SectionTitle>
-          {GATEWAYS.map((gw) => (
-            <button
-              key={gw.id}
-              type="button"
-              onClick={() => setGateway(gw.id)}
-              className={cn(
-                "flex w-full items-center gap-4 rounded-2xl border border-border p-4 text-left transition-colors",
-                gateway === gw.id
-                  ? "border-primary bg-primary-soft"
-                  : "bg-card hover:bg-muted/50",
-              )}
-            >
-              <gw.icon className="size-6 text-primary" />
-              <span className="flex-1">
-                <span className="block font-bold text-foreground">{gw.label}</span>
-                <span className="block text-sm text-muted-foreground">{gw.hint}</span>
-              </span>
-              <span
-                className={cn(
-                  "size-5 rounded-full border-2",
-                  gateway === gw.id ? "border-primary bg-primary" : "border-border",
-                )}
-              />
-            </button>
-          ))}
-          <p className="text-xs text-muted-foreground pt-1">
-            If one gateway is down, the other is used automatically.
-          </p>
-        </Card>
-
         <Card className="p-4">
           <SectionTitle className="mb-3">Recent recharges</SectionTitle>
           {deposits?.length ? (
@@ -221,27 +213,104 @@ function RechargePage() {
       </div>
 
       <div className="fixed inset-x-0 bottom-20 z-30 mx-auto w-full max-w-[520px] px-4">
-        <PrimaryButton onClick={proceed} disabled={loading}>
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <svg className="size-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-              Processing…
-            </span>
-          ) : (
-            <><Zap className="size-5" /> Go to Recharge</>
-          )}
+        <PrimaryButton onClick={handleOpenModal} disabled={loading}>
+          <><Zap className="size-5" /> Go to Recharge</>
         </PrimaryButton>
       </div>
+
+      {/* Payment Gateway Selection Modal / Popup */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="w-full max-w-md animate-in slide-in-from-bottom-5 rounded-t-3xl border border-border bg-card p-6 shadow-2xl sm:rounded-3xl">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div>
+                <h3 className="text-lg font-extrabold text-foreground">Select Payment Channel</h3>
+                <p className="text-xs text-muted-foreground">
+                  Recharge Amount: <span className="font-extrabold text-primary-dark">{INR(Number(amount) || 0)}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !loading && setShowModal(false)}
+                className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="my-5 space-y-3">
+              {CHANNELS.map((ch) => {
+                const isSelected = selectedChannel === ch.id;
+                return (
+                  <button
+                    key={ch.id}
+                    type="button"
+                    onClick={() => setSelectedChannel(ch.id)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-2xl border p-4 text-left transition-all",
+                      isSelected
+                        ? "border-primary bg-primary-soft shadow-sm"
+                        : "border-border bg-card hover:bg-muted/50",
+                    )}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div
+                        className={cn(
+                          "flex size-11 items-center justify-center rounded-xl",
+                          isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        <ch.icon className="size-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-foreground">{ch.name}</span>
+                          {ch.id === "bondpay" && (
+                            <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-extrabold text-primary-dark">
+                              RECOMMENDED
+                            </span>
+                          )}
+                        </div>
+                        <span className="block text-xs font-semibold text-muted-foreground">
+                          {ch.hint}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected ? (
+                      <CheckCircle2 className="size-6 text-primary fill-primary text-card" />
+                    ) : (
+                      <div className="size-5 rounded-full border-2 border-border" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="pt-2">
+              <PrimaryButton onClick={proceedPayment} disabled={loading}>
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="size-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Processing Payment…
+                  </span>
+                ) : (
+                  <>Pay Now {INR(Number(amount) || 0)}</>
+                )}
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      )}
     </MobileShell>
   );
 }
