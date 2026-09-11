@@ -1,6 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Lock, Coins, Zap, Smartphone, X, CheckCircle2 } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import {
+  Lock,
+  Coins,
+  Zap,
+  Smartphone,
+  X,
+  CheckCircle2,
+  Wifi,
+  ShieldCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 import { MobileShell } from "@/components/layout/MobileShell";
 import { Header } from "@/components/layout/Header";
@@ -8,8 +17,7 @@ import { Card, SectionTitle } from "@/components/ui-kit/Card";
 import { WalletCard } from "@/components/ui-kit/WalletCard";
 import { AmountInput } from "@/components/ui-kit/AmountInput";
 import { PrimaryButton } from "@/components/ui-kit/Button";
-import { EmptyState } from "@/components/ui-kit/Skeleton";
-import { useProfile, useSettings, useDeposits, fmtDate } from "@/services/api";
+import { useProfile, useSettings } from "@/services/api";
 import { INR } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,10 +56,32 @@ const CHANNELS = [
 
 type ChannelId = (typeof CHANNELS)[number]["id"];
 
+const INSTRUCTIONS = [
+  {
+    id: "min_amount",
+    icon: Coins,
+    text: "Minimum deposit amount is ₹290.",
+  },
+  {
+    id: "network_stability",
+    icon: Wifi,
+    text: "Ensure your network is stable before proceeding.",
+  },
+  {
+    id: "auto_credit",
+    icon: CheckCircle2,
+    text: "Funds will be credited automatically after successful payment.",
+  },
+  {
+    id: "encryption_security",
+    icon: ShieldCheck,
+    text: "Your transaction is secured with end-to-end encryption.",
+  },
+] as const;
+
 function RechargePage() {
   const { data: profile } = useProfile();
   const { data: settings } = useSettings();
-  const { data: deposits } = useDeposits();
 
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -60,6 +90,22 @@ function RechargePage() {
   const presets = useMemo(() => settings?.recharge_presets ?? [], [settings]);
   const min = settings?.min_recharge ?? 0;
   const [amount, setAmount] = useState("");
+
+  // Fix button freeze bug: reset loading and modal states when user returns via back button or bfcache
+  useEffect(() => {
+    const handlePageShow = () => {
+      setLoading(false);
+      setShowModal(false);
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", handlePageShow);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", handlePageShow);
+    };
+  }, []);
 
   const callGateway = async (gw: ChannelId, value: number, token: string): Promise<string> => {
     const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
@@ -144,6 +190,12 @@ function RechargePage() {
       }
 
       console.log(`[recharge] Redirecting via ${usedGateway}:`, paymentUrl);
+      
+      // Delay window navigation slightly so loading state doesn't freeze if browser traps back
+      setTimeout(() => {
+        setLoading(false);
+      }, 3000);
+
       window.location.href = paymentUrl!;
     } catch (err) {
       console.error("[recharge] Payment initiation failed:", err);
@@ -190,25 +242,21 @@ function RechargePage() {
           <AmountInput value={amount} onChange={setAmount} currency="₹" />
         </Card>
 
-        <Card className="p-4">
-          <SectionTitle className="mb-3">Recent recharges</SectionTitle>
-          {deposits?.length ? (
-            <ul className="space-y-3">
-              {deposits.slice(0, 5).map((d) => (
-                <li key={d.id} className="flex items-center justify-between">
-                  <span>
-                    <span className="block font-semibold text-foreground">UTR {d.utr}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {fmtDate(d.created_at)} · {d.status}
-                    </span>
-                  </span>
-                  <span className="font-bold text-primary-dark">{INR(d.amount)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState title="No recharges yet" />
-          )}
+        {/* Recharge Instructions Section (Replaces Recent Recharges) */}
+        <Card className="space-y-3 p-4">
+          <SectionTitle className="mb-2">Recharge Instructions</SectionTitle>
+          <div className="space-y-3">
+            {INSTRUCTIONS.map(({ id, icon: Icon, text }) => (
+              <div key={id} className="flex items-start gap-3 rounded-xl bg-muted/40 p-3">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary-dark">
+                  <Icon className="size-4" />
+                </div>
+                <p className="pt-0.5 text-xs font-semibold text-foreground leading-relaxed">
+                  {text}
+                </p>
+              </div>
+            ))}
+          </div>
         </Card>
       </div>
 

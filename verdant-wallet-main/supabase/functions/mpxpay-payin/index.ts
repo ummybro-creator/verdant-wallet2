@@ -76,10 +76,11 @@ serve(async (req) => {
     const signStr = `${API_KEY}${amountStr}${callbackUrl}${MERCHANT_ID}${merchantOrderNo}`;
     const signature = await hashMd5(signStr);
 
+    // Send amountStr ("290.00") as string to prevent IEEE 754 floating point precision drift/deductions
     const payload = {
       merchant_id: MERCHANT_ID,
       api_key: API_KEY,
-      amount,
+      amount: amountStr,
       merchant_order_no: merchantOrderNo,
       callback_url: callbackUrl,
       currency: "INR",
