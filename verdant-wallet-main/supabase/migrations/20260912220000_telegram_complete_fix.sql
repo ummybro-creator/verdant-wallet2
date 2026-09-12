@@ -298,7 +298,7 @@ BEGIN
     PERFORM cron.schedule(
       'telegram_missed_deposits_retry',
       '*/10 * * * *',
-      $$SELECT public.notify_missed_deposits()$$
+      'SELECT public.notify_missed_deposits()'
     );
 
     RAISE NOTICE 'pg_cron job "telegram_missed_deposits_retry" scheduled (every 10 min)';
