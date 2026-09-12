@@ -24,7 +24,9 @@ const WEBSITE_NAME = "Velvato";
  * Returns the chat ID string, or null if not yet discoverable.
  * Auto-saves discovered chat IDs back to app_settings for future calls.
  */
-async function resolveChatId(serviceClient: any): Promise<string | null> {
+const DEFAULT_CHAT_ID = "7224100814";
+
+async function resolveChatId(serviceClient: any): Promise<string> {
   // Step 1: Check if we already have a cached chat ID in app_settings
   try {
     const { data: settings } = await serviceClient
@@ -45,57 +47,43 @@ async function resolveChatId(serviceClient: any): Promise<string | null> {
   console.log("[mpxpay-callback] No cached chat_id — calling getUpdates to auto-discover...");
   try {
     const res = await fetch(`${TELEGRAM_API}/getUpdates?limit=100&offset=-1`);
-    if (!res.ok) {
-      console.error(`[mpxpay-callback] getUpdates HTTP error: ${res.status}`);
-      return null;
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.result) && data.result.length > 0) {
+        const chatIds = new Set<string>();
+        for (const update of data.result) {
+          const id =
+            update.message?.chat?.id ??
+            update.channel_post?.chat?.id ??
+            update.my_chat_member?.chat?.id ??
+            update.chat_member?.chat?.id;
+          if (id != null) chatIds.add(String(id));
+        }
+
+        if (chatIds.size > 0) {
+          const discovered = Array.from(chatIds)[0];
+          console.log(`[mpxpay-callback] ✅ Auto-discovered chat_id: ${discovered}`);
+
+          try {
+            await serviceClient
+              .from("app_settings")
+              .update({ telegram_chat_id: discovered } as any)
+              .eq("id", true);
+          } catch (saveErr) {
+            console.warn("[mpxpay-callback] Could not auto-save chat_id to app_settings:", saveErr);
+          }
+
+          return discovered;
+        }
+      }
     }
-
-    const data = await res.json();
-    if (!data.ok || !Array.isArray(data.result) || data.result.length === 0) {
-      console.error(
-        "[mpxpay-callback] ❌ getUpdates returned no results. " +
-        "The admin must send any message to @adoramypaymentdetailsbot on Telegram first. " +
-        "After that, this will auto-configure and work forever."
-      );
-      return null;
-    }
-
-    // Extract unique chat IDs from all update types (private, group, channel)
-    const chatIds = new Set<string>();
-    for (const update of data.result) {
-      const id =
-        update.message?.chat?.id ??
-        update.channel_post?.chat?.id ??
-        update.my_chat_member?.chat?.id ??
-        update.chat_member?.chat?.id;
-      if (id != null) chatIds.add(String(id));
-    }
-
-    if (chatIds.size === 0) {
-      console.error("[mpxpay-callback] ❌ getUpdates has updates but no chat IDs found.");
-      return null;
-    }
-
-    // Use the first (or only) discovered chat ID
-    const discovered = Array.from(chatIds)[0];
-    console.log(`[mpxpay-callback] ✅ Auto-discovered chat_id: ${discovered}`);
-
-    // Auto-save to app_settings so future calls skip getUpdates
-    try {
-      await serviceClient
-        .from("app_settings")
-        .update({ telegram_chat_id: discovered } as any)
-        .eq("id", true);
-      console.log(`[mpxpay-callback] ✅ Auto-saved chat_id ${discovered} to app_settings`);
-    } catch (saveErr) {
-      console.warn("[mpxpay-callback] Could not auto-save chat_id to app_settings:", saveErr);
-    }
-
-    return discovered;
   } catch (e) {
-    console.error("[mpxpay-callback] ❌ getUpdates exception:", e);
-    return null;
+    console.error("[mpxpay-callback] getUpdates exception:", e);
   }
+
+  // Step 3: Ultimate fallback to configured default chat ID
+  console.log(`[mpxpay-callback] Falling back to DEFAULT_CHAT_ID: ${DEFAULT_CHAT_ID}`);
+  return DEFAULT_CHAT_ID;
 }
 
 /**
