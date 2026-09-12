@@ -5,9 +5,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BOT_TOKEN = "8657226691:AAEYVYCzmyDu6FVBcmpJSt1xxD4QFok9ePo";
 const WEBSITE_NAME = "Velvato";
 
+/**
+ * Sends a Telegram message to the configured admin chat.
+ *
+ * Chat ID resolution order (most to least reliable):
+ *  1. TELEGRAM_CHAT_ID env secret (set in Supabase Edge Function secrets)
+ *  2. app_settings.telegram_chat_id (configurable via Admin → Settings panel)
+ *  3. app_settings.telegram_bot_token (if different from env secret)
+ *
+ * Bot token resolution order:
+ *  1. TELEGRAM_BOT_TOKEN env secret
+ *  2. app_settings.telegram_bot_token
+ *
+ * If neither source has a chat ID or bot token, a clear error is logged.
+ */
 async function sendTelegramNotification(
   serviceClient: any,
   details: {
@@ -16,74 +29,97 @@ async function sendTelegramNotification(
     userId: string;
     userPhone: string;
     referrerPhone: string;
+    orderId: string;
   },
-) {
-  try {
-    const text =
-      `🔔 *New Deposit Completed!*\n\n` +
-      `💰 *Deposit Amount*: ₹${details.amount.toFixed(2)}\n` +
-      `💳 *Gateway Name*: ${details.gatewayName}\n` +
-      `🌐 *Website Name*: ${WEBSITE_NAME}\n` +
-      `👤 *User ID*: ${details.userId}\n` +
-      `📱 *User Phone*: ${details.userPhone}\n` +
-      `👥 *Referrer Phone*: ${details.referrerPhone}`;
+): Promise<void> {
+  // ── 1. Resolve bot token ──────────────────────────────────────────────────
+  let botToken: string =
+    Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
 
-    let chatIds: string[] = [];
+  // ── 2. Resolve chat ID ───────────────────────────────────────────────────
+  let chatId: string =
+    Deno.env.get("TELEGRAM_CHAT_ID") || "";
 
-    // Check if telegram_chat_id is defined in app_settings
+  // ── 3. Fall back to app_settings if env secrets are not set ─────────────
+  if (!chatId || !botToken) {
     try {
-      const { data: settings } = await serviceClient
+      const { data: settings, error: settingsErr } = await serviceClient
         .from("app_settings")
-        .select("*")
+        .select("telegram_chat_id, telegram_bot_token")
         .single();
-      if (settings?.telegram_chat_id) {
-        chatIds.push(String(settings.telegram_chat_id));
-      }
-    } catch {
-      // ignore
-    }
 
-    // If no custom chat_id, attempt getUpdates to find chat ID(s)
-    if (chatIds.length === 0) {
-      try {
-        const uRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates`);
-        if (uRes.ok) {
-          const uData = await uRes.json();
-          if (uData.result && Array.isArray(uData.result)) {
-            const set = new Set<string>();
-            for (const item of uData.result) {
-              const cid =
-                item.message?.chat?.id ||
-                item.channel_post?.chat?.id ||
-                item.my_chat_member?.chat?.id;
-              if (cid) set.add(String(cid));
-            }
-            chatIds = Array.from(set);
-          }
+      if (settingsErr) {
+        console.error("[bondpay-callback] Failed to read app_settings:", settingsErr.message);
+      } else {
+        if (!chatId && settings?.telegram_chat_id) {
+          chatId = String(settings.telegram_chat_id).trim();
         }
-      } catch (e) {
-        console.warn("[bondpay-callback] Failed to get telegram updates:", e);
+        if (!botToken && settings?.telegram_bot_token) {
+          botToken = String(settings.telegram_bot_token).trim();
+        }
       }
+    } catch (e) {
+      console.error("[bondpay-callback] Exception reading app_settings:", e);
     }
+  }
 
-    if (chatIds.length === 0) {
-      console.warn("[bondpay-callback] No telegram chat_id found to send message");
-      return;
-    }
+  // ── 4. Validate ──────────────────────────────────────────────────────────
+  if (!botToken) {
+    console.error(
+      "[bondpay-callback] ❌ Telegram bot token is not configured. " +
+      "Set TELEGRAM_BOT_TOKEN in Supabase Edge Function secrets, OR set " +
+      "telegram_bot_token in Admin → Settings. Notification NOT sent.",
+    );
+    return;
+  }
 
-    for (const cid of chatIds) {
-      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+  if (!chatId) {
+    console.error(
+      "[bondpay-callback] ❌ Telegram chat ID is not configured. " +
+      "Set TELEGRAM_CHAT_ID in Supabase Edge Function secrets, OR set " +
+      "telegram_chat_id in Admin → Settings. Notification NOT sent.",
+    );
+    return;
+  }
+
+  // ── 5. Build message ─────────────────────────────────────────────────────
+  const text =
+    `🔔 *New Deposit Completed!*\n\n` +
+    `💰 *Deposit Amount*: ₹${details.amount.toFixed(2)}\n` +
+    `💳 *Gateway Name*: ${details.gatewayName}\n` +
+    `🌐 *Website Name*: ${WEBSITE_NAME}\n` +
+    `👤 *User ID*: ${details.userId}\n` +
+    `📱 *User Phone*: ${details.userPhone}\n` +
+    `👥 *Referrer Phone*: ${details.referrerPhone}\n` +
+    `🆔 *Order ID*: ${details.orderId}`;
+
+  // ── 6. Send ───────────────────────────────────────────────────────────────
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chat_id: cid,
+          chat_id: chatId,
           text,
           parse_mode: "Markdown",
         }),
-      });
+      },
+    );
+
+    const resBody = await res.json();
+
+    if (!res.ok || !resBody.ok) {
+      console.error(
+        `[bondpay-callback] ❌ Telegram sendMessage failed (HTTP ${res.status}):`,
+        JSON.stringify(resBody),
+      );
+    } else {
+      console.log(`[bondpay-callback] ✅ Telegram notification sent to chat_id=${chatId}`);
     }
   } catch (err) {
-    console.error("[bondpay-callback] Telegram notification error:", err);
+    console.error("[bondpay-callback] ❌ Telegram sendMessage exception:", err);
   }
 }
 
@@ -173,13 +209,6 @@ serve(async (req) => {
 
   if (balErr) {
     console.warn("[bondpay-callback] admin_credit_wallet RPC failed, applying fallback:", balErr);
-    await serviceClient
-      .from("profiles")
-      .update({
-        balance: serviceClient.rpc("balance", {}) as unknown as number,
-      })
-      .eq("id", pr.user_id);
-
     await serviceClient.from("deposits").insert({
       user_id: pr.user_id,
       amount: expectedAmount,
@@ -230,7 +259,14 @@ serve(async (req) => {
     userId: userProfile?.user_code || "N/A",
     userPhone: userProfile?.phone || "N/A",
     referrerPhone,
+    orderId: orderNo || merchantOrder,
   });
+
+  // Mark this payment request as telegram-notified
+  await serviceClient
+    .from("payment_requests")
+    .update({ telegram_notified: true })
+    .eq("merchant_order_no", merchantOrder);
 
   console.log(`[bondpay-callback] Successfully credited ₹${expectedAmount} to user ${pr.user_id}`);
 

@@ -678,6 +678,8 @@ function SettingsPanel() {
       support_url: data.support_url ?? "",
       channel_url: data.channel_url ?? "",
       apk_url: data.apk_url ?? "",
+      telegram_bot_token: (data as any).telegram_bot_token ?? "",
+      telegram_chat_id: (data as any).telegram_chat_id ?? "",
     });
   }, [data]);
 
@@ -704,7 +706,9 @@ function SettingsPanel() {
         support_url: form['support_url'] ?? "",
         channel_url: form['channel_url'] ?? "",
         apk_url: form['apk_url'] ?? "",
-      })
+        telegram_bot_token: form['telegram_bot_token'] ?? "",
+        telegram_chat_id: form['telegram_chat_id'] ?? "",
+      } as any)
       .eq("id", true);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
@@ -727,6 +731,8 @@ function SettingsPanel() {
     { key: "support_url", label: "Support URL" },
     { key: "channel_url", label: "Channel URL" },
     { key: "apk_url", label: "APK URL" },
+    { key: "telegram_bot_token", label: "🤖 Telegram Bot Token (for deposit notifications)" },
+    { key: "telegram_chat_id", label: "💬 Telegram Chat ID (admin group or channel ID)" },
   ];
 
   return (
