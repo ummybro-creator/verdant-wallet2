@@ -731,24 +731,133 @@ function SettingsPanel() {
     { key: "support_url", label: "Support URL" },
     { key: "channel_url", label: "Channel URL" },
     { key: "apk_url", label: "APK URL" },
-    { key: "telegram_bot_token", label: "🤖 Telegram Bot Token (for deposit notifications)" },
-    { key: "telegram_chat_id", label: "💬 Telegram Chat ID (admin group or channel ID)" },
+    { key: "telegram_bot_token", label: "🤖 Telegram Bot Token" },
   ];
 
   return (
-    <Card className="space-y-3 p-4">
-      <SectionTitle>System settings</SectionTitle>
-      {fields.map((f) => (
-        <label key={f.key} className="block space-y-1.5">
-          <span className="pl-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            {f.label}
-          </span>
-          <Input value={form[f.key] ?? ""} onChange={set(f.key)} className="h-12" />
-        </label>
-      ))}
-      <PrimaryButton loading={saving} onClick={save}>
-        Save settings
-      </PrimaryButton>
+    <div className="space-y-4">
+      <TelegramSetupCard
+        currentChatId={form["telegram_chat_id"] ?? ""}
+        onSaved={(newId) => {
+          setForm((f) => ({ ...f, telegram_chat_id: newId }));
+          qc.invalidateQueries();
+        }}
+      />
+      <Card className="space-y-3 p-4">
+        <SectionTitle>System settings</SectionTitle>
+        {fields.map((f) => (
+          <label key={f.key} className="block space-y-1.5">
+            <span className="pl-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {f.label}
+            </span>
+            <Input value={form[f.key] ?? ""} onChange={set(f.key)} className="h-12" />
+          </label>
+        ))}
+        <PrimaryButton loading={saving} onClick={save}>
+          Save settings
+        </PrimaryButton>
+      </Card>
+    </div>
+  );
+}
+
+function TelegramSetupCard({
+  currentChatId,
+  onSaved,
+}: {
+  currentChatId: string;
+  onSaved: (newId: string) => void;
+}) {
+  const [chatId, setChatId] = useState(currentChatId);
+  const [saving, setSaving] = useState(false);
+  const [sendingMissed, setSendingMissed] = useState(false);
+
+  useEffect(() => { setChatId(currentChatId); }, [currentChatId]);
+
+  const isConfigured = currentChatId.trim() !== "";
+
+  const saveAndNotify = async () => {
+    const trimmed = chatId.trim();
+    if (!trimmed) { toast.error("Enter a Telegram Chat ID first"); return; }
+    setSaving(true);
+    try {
+      const { data, error } = await (supabase.rpc as any)("admin_set_telegram_chat_id", { p_chat_id: trimmed });
+      if (error) throw error;
+      toast.success(String(data));
+      onSaved(trimmed);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to save chat ID");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendMissed = async () => {
+    if (!isConfigured) { toast.error("Configure the Chat ID first"); return; }
+    setSendingMissed(true);
+    try {
+      const { data, error } = await (supabase.rpc as any)("notify_missed_deposits");
+      if (error) throw error;
+      toast.success(`Sent ${data} missed deposit notification(s)`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to send missed notifications");
+    } finally {
+      setSendingMissed(false);
+    }
+  };
+
+  return (
+    <Card className="space-y-4 p-4 border-2 border-primary/30">
+      <div className="flex items-start gap-3">
+        <span className="text-2xl">🤖</span>
+        <div>
+          <SectionTitle className="mb-0.5">Telegram Deposit Notifications</SectionTitle>
+          <p className="text-xs text-muted-foreground">
+            Bot: <span className="font-mono font-bold">@adoramypaymentdetailsbot</span>
+            {" · "}
+            <span className={isConfigured ? "text-green-600 font-bold" : "text-red-500 font-bold"}>
+              {isConfigured ? `✅ Connected (ID: ${currentChatId})` : "❌ Chat ID not configured"}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-muted/50 p-3 space-y-2 text-xs text-foreground">
+        <p className="font-bold">📋 Steps to get your Chat ID:</p>
+        <p><strong>Step 1:</strong> Open Telegram, search <code className="bg-card px-1 rounded">@adoramypaymentdetailsbot</code>, tap <strong>Start</strong> and send any message (e.g. "hi").</p>
+        <p><strong>Step 2:</strong> Open this link in your browser to get your chat ID:</p>
+        <code className="block bg-card rounded px-2 py-1 break-all select-all text-[10px]">
+          https://api.telegram.org/bot8657226691:AAEYVYCzmyDu6FVBcmpJSt1xxD4QFok9ePo/getUpdates
+        </code>
+        <p><strong>Step 3:</strong> Look for <code className="bg-card px-1 rounded">"chat":{"{"}  "id": 123456789 {"}"}</code> — copy that number.</p>
+        <p><strong>Step 4:</strong> Paste it below and press <strong>Save &amp; Send Missed</strong>.</p>
+      </div>
+
+      <label className="block space-y-1.5">
+        <span className="pl-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Telegram Chat ID
+        </span>
+        <Input
+          value={chatId}
+          onChange={(e) => setChatId(e.target.value)}
+          placeholder="e.g. 987654321 or -1001234567890"
+          className="h-12 font-mono"
+        />
+      </label>
+
+      <div className="grid grid-cols-2 gap-2">
+        <PrimaryButton loading={saving} onClick={saveAndNotify}>
+          💾 Save &amp; Send Missed
+        </PrimaryButton>
+        <Button
+          variant="outline"
+          size="md"
+          onClick={sendMissed}
+          disabled={sendingMissed || !isConfigured}
+        >
+          {sendingMissed ? "Sending…" : "📤 Resend Missed"}
+        </Button>
+      </div>
     </Card>
   );
 }
