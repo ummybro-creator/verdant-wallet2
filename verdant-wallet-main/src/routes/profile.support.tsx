@@ -17,7 +17,7 @@ export const Route = createFileRoute("/profile/support")({
   component: SupportPage,
 });
 
-const SUPPORT_AGENT_URL = "https://t.me/andry0725";
+const SUPPORT_AGENT_URL = "https://t.me/Verdant_service_bot";
 
 function SupportPage() {
   return (
@@ -34,7 +34,7 @@ function SupportPage() {
           <ListRow
             icon={<Send className="size-6" />}
             title="Support agent"
-            description="@andry0725"
+            description="@Verdant_service_bot"
             onClick={() => window.location.assign(SUPPORT_AGENT_URL)}
           />
           <ListRow

@@ -31,7 +31,7 @@ export const Route = createFileRoute("/home")({
 const shortcuts = [
   { icon: IndianRupee, label: "Recharge", to: "/recharge" },
   { icon: Wallet, label: "Withdraw", to: "/withdraw" },
-  { icon: Headphones, label: "Online", to: "/profile/support" },
+  { icon: Headphones, label: "Online", href: "https://t.me/Verdant_service_bot" },
   { icon: Send, label: "Channel", href: "https://t.me/+Gbku0_QTm7EwYzU1" },
 ] as const;
 
