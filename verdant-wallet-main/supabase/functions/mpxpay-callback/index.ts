@@ -179,15 +179,14 @@ serve(async (req) => {
 
   let body: Record<string, any> = {};
   try {
-    const contentType = req.headers.get("content-type") || "";
-    if (contentType.includes("application/x-www-form-urlencoded")) {
-      const text = await req.text();
+    const text = await req.text();
+    try {
+      body = JSON.parse(text);
+    } catch {
       const params = new URLSearchParams(text);
       for (const [key, value] of params.entries()) {
         body[key] = value;
       }
-    } else {
-      body = await req.json();
     }
   } catch {
     return new Response("Bad request body", { status: 400 });

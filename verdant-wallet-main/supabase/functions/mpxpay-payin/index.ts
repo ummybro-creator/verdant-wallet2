@@ -76,11 +76,10 @@ serve(async (req) => {
     const signStr = `${API_KEY}${amountStr}${callbackUrl}${MERCHANT_ID}${merchantOrderNo}`;
     const signature = await hashMd5(signStr);
 
-    // Send amountStr ("290.00") as string to prevent IEEE 754 floating point precision drift/deductions
     const payload = {
       merchant_id: MERCHANT_ID,
       api_key: API_KEY,
-      amount: amountStr,
+      amount: Number(amountStr),
       merchant_order_no: merchantOrderNo,
       callback_url: callbackUrl,
       currency: "INR",
@@ -98,7 +97,7 @@ serve(async (req) => {
     const mpxData = await mpxRes.json();
     console.log("[mpxpay-payin] API response:", JSON.stringify(mpxData));
 
-    if (!mpxRes.ok || mpxData.status !== 1 || !mpxData.url) {
+    if (!mpxRes.ok || (mpxData.status !== 1 && mpxData.status !== "1") || !mpxData.url) {
       console.error("[mpxpay-payin] API error:", mpxData);
       return new Response(
         JSON.stringify({ error: mpxData.message || "MPX Pay order creation failed" }),
