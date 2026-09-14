@@ -5,7 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import md5 from "npm:md5";
 
-const MPXPAY_ENDPOINT = "https://api.mpxpays.com/api/payIn";
+const MPXPAY_ENDPOINT = "https://api.mpxpayss.com/api/payIn";
 const MERCHANT_ID = "953010";
 const API_KEY = "cf32923f2dae716bd29030025410149b7ed017b01e182c1aadcbb8f97c21a305";
 

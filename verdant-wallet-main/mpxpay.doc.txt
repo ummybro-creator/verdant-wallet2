@@ -9,7 +9,7 @@ Payment API Key: cf32923f2dae716bd29030025410149b7ed017b01e182c1aadcbb8f97c21a30
 PayIn Endpoint
 API Endpoint
 POST
-https://api.mpxpays.com/api/payIn
+https://api.mpxpayss.com/api/payIn
 Content-Type: application/json
 Request Parameters
 Send as a JSON body in the POST request.
