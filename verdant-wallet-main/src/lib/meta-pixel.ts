@@ -34,8 +34,8 @@ export async function initMetaPixel() {
       
       if (ref) {
         sessionStorage.setItem("velvato_ref", ref);
-        const { data } = await supabase.rpc("get_meta_pixel_id", { p_invite_code: ref });
-        if (data) {
+        const { data } = await (supabase.rpc as any)("get_meta_pixel_id", { p_invite_code: ref });
+        if (data && typeof data === "string") {
           pixelId = data;
         }
       }

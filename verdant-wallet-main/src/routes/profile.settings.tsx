@@ -44,8 +44,8 @@ function SettingsPage() {
   const savePixel = async () => {
     if (!profile) return;
     setSavingPixel(true);
-    const { error } = await supabase
-      .from("profiles")
+    const { error } = await (supabase
+      .from("profiles") as any)
       .update({ meta_pixel_id: pixelId.trim() || null })
       .eq("id", profile.id);
     setSavingPixel(false);

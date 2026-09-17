@@ -28,12 +28,29 @@ export const Route = createFileRoute("/recharge")({
       { title: "Recharge your Velvato wallet" },
       {
         name: "description",
-        content: "Add funds to your Velvato wallet via Bond Pay or MPX Pay.",
+        content: "Add funds to your Velvato wallet via Bond Pay.",
       },
       { property: "og:title", content: "Recharge your Velvato wallet" },
       { property: "og:description", content: "Fast, secure wallet top-ups in seconds." },
     ],
   }),
+  errorComponent: ({ reset }) => (
+    <MobileShell nav={false}>
+      <Header title="Recharge" />
+      <div className="p-6 text-center space-y-4">
+        <p role="alert" className="text-sm text-muted-foreground">
+          Unable to load recharge options right now. Please try again.
+        </p>
+        <button
+          type="button"
+          onClick={() => reset()}
+          className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+        >
+          Try Again
+        </button>
+      </div>
+    </MobileShell>
+  ),
   component: RechargePage,
 });
 
@@ -43,13 +60,6 @@ const CHANNELS = [
     name: "CHANNEL - 1",
     label: "Bond Pay (Default)",
     hint: "Instant UPI · 0% Fee",
-    icon: Smartphone,
-  },
-  {
-    id: "mpxpay",
-    name: "CHANNEL - 2",
-    label: "MPX Pay",
-    hint: "Fast & Secure UPI · 0% Fee",
     icon: Smartphone,
   },
 ] as const;
@@ -87,8 +97,14 @@ function RechargePage() {
   const [showModal, setShowModal] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelId>("bondpay");
 
-  const presets = useMemo(() => settings?.recharge_presets ?? [], [settings]);
-  const min = settings?.min_recharge ?? 0;
+  const presets = useMemo(() => {
+    if (Array.isArray(settings?.recharge_presets) && settings.recharge_presets.length > 0) {
+      return settings.recharge_presets.map((n) => Number(n));
+    }
+    return [290, 560, 750, 800, 1100, 1400, 2000, 2600, 3300, 5000];
+  }, [settings]);
+
+  const min = Number(settings?.min_recharge) || 290;
   const [amount, setAmount] = useState("");
 
   // Fix button freeze bug: reset loading and modal states when user returns via back button or bfcache
@@ -110,7 +126,7 @@ function RechargePage() {
   const callGateway = async (gw: ChannelId, value: number, token: string): Promise<string> => {
     const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
     const apikey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string;
-    const fnName = gw === "bondpay" ? "bondpay-payin" : "mpxpay-payin";
+    const fnName = "bondpay-payin";
 
     const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
       method: "POST",
@@ -166,40 +182,17 @@ function RechargePage() {
         return;
       }
 
-      let paymentUrl: string | null = null;
-      let usedGateway = selectedChannel;
+      const paymentUrl = await callGateway(selectedChannel, value, token);
+      console.log(`[recharge] Redirecting via ${selectedChannel}:`, paymentUrl);
 
-      // Try the selected channel first
-      try {
-        paymentUrl = await callGateway(selectedChannel, value, token);
-      } catch (primaryErr) {
-        console.warn(`[recharge] Primary channel (${selectedChannel}) failed:`, primaryErr);
-        toast.info("Switching to backup payment channel…");
-
-        // Auto-fallback to the other channel
-        const fallback: ChannelId = selectedChannel === "bondpay" ? "mpxpay" : "bondpay";
-        try {
-          paymentUrl = await callGateway(fallback, value, token);
-          usedGateway = fallback;
-        } catch (fallbackErr) {
-          console.error("[recharge] Fallback channel also failed:", fallbackErr);
-          toast.error("Payment service is temporarily unavailable. Please try again shortly.");
-          setLoading(false);
-          return;
-        }
-      }
-
-      console.log(`[recharge] Redirecting via ${usedGateway}:`, paymentUrl);
-      
-      // Delay window navigation slightly so loading state doesn't freeze if browser traps back
       setTimeout(() => {
         setLoading(false);
       }, 3000);
 
-      window.location.href = paymentUrl!;
-    } catch (err) {
+      window.location.href = paymentUrl;
+    } catch (err: any) {
       console.error("[recharge] Payment initiation failed:", err);
-      toast.error("Something went wrong. Please try again.");
+      toast.error(err?.message || "Payment service is temporarily unavailable. Please try again shortly.");
       setLoading(false);
     }
   };

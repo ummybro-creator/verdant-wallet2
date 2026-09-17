@@ -107,6 +107,22 @@ const authed = <T,>(
 
 /* ---------------- queries ---------------- */
 
+const DEFAULT_SETTINGS: Settings = {
+  upi_id: "coolio@upi",
+  payee_name: "Coolio Ice Cream",
+  min_recharge: 290,
+  min_withdraw: 210,
+  tax_percent: 10,
+  level1_rate: 25,
+  level2_rate: 3,
+  level3_rate: 2,
+  recharge_presets: [290, 560, 750, 800, 1100, 1400, 2000, 2600, 3300, 5000],
+  support_url: "https://t.me/Verdant_service_bot",
+  channel_url: "https://t.me/coolio_channel",
+  apk_url: null,
+  maintenance: false,
+};
+
 export function usePlans() {
   return useQuery({
     queryKey: ["plans"],
@@ -126,9 +142,22 @@ export function useSettings() {
   return useQuery({
     queryKey: ["settings"],
     queryFn: async (): Promise<Settings> => {
-      const { data, error } = await supabase.from("app_settings").select("*").single();
-      if (error) throw error;
-      return data as unknown as Settings;
+      try {
+        const { data, error } = await supabase.from("app_settings").select("*").maybeSingle();
+        if (error || !data) return DEFAULT_SETTINGS;
+        return {
+          ...DEFAULT_SETTINGS,
+          ...data,
+          min_recharge: Number(data.min_recharge) || DEFAULT_SETTINGS.min_recharge,
+          min_withdraw: Number(data.min_withdraw) || DEFAULT_SETTINGS.min_withdraw,
+          tax_percent: Number(data.tax_percent) || DEFAULT_SETTINGS.tax_percent,
+          recharge_presets: Array.isArray(data.recharge_presets) && data.recharge_presets.length > 0
+            ? data.recharge_presets.map((n: unknown) => Number(n))
+            : DEFAULT_SETTINGS.recharge_presets,
+        } as unknown as Settings;
+      } catch {
+        return DEFAULT_SETTINGS;
+      }
     },
   });
 }
@@ -139,13 +168,22 @@ export function useProfile() {
     authed<Profile | null>(
       ["profile", userId],
       async () => {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId!)
-          .maybeSingle();
-        if (error) throw error;
-        return data as unknown as Profile | null;
+        if (!userId) return null;
+        try {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", userId)
+            .maybeSingle();
+          if (error) {
+            console.error("[useProfile] Error fetching profile:", error);
+            return null;
+          }
+          return data as unknown as Profile | null;
+        } catch (e) {
+          console.error("[useProfile] Exception:", e);
+          return null;
+        }
       },
       !!userId,
     ),
