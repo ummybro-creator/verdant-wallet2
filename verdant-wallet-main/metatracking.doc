@@ -1,0 +1,198 @@
+===============================================================================
+META PIXEL TRACKING SYSTEM DOCUMENTATION
+Project: Velvato / m-bazar-invest
+File: metatracking.doc
+===============================================================================
+
+1. SYSTEM OVERVIEW & ARCHITECTURE
+-------------------------------------------------------------------------------
+The project implements a complete, dynamic Meta (Facebook) Pixel tracking system.
+It supports both global application tracking and dynamic promoter-level multi-pixel 
+tracking based on referral link attribution.
+
+Architecture Diagram:
+[ User visits referral link: ?ref=INVITE_CODE ]
+                   │
+                   ▼
+[ sessionStorage stores "velvato_ref" ]
+                   │
+                   ▼
+[ initMetaPixel() calls Supabase RPC: get_meta_pixel_id ]
+                   │
+    ┌──────────────┴──────────────┐
+    ▼                             ▼
+[ Custom Promoter Pixel ID ]  [ Default Global Pixel ID ]
+(If set in profiles)          (1076043171806461)
+    └──────────────┬──────────────┘
+                   ▼
+[ fbq('init', pixelId) + fbevents.js loaded ]
+                   │
+                   ▼
+[ Event Dispatch: PageView, ViewContent, InitiateCheckout, Purchase, CompleteRegistration, Login, Subscribe, WithdrawalSubmitted ]
+
+
+2. CONFIGURATION & PIXEL ID RESOLUTION
+-------------------------------------------------------------------------------
+- Default Global Pixel ID: 1076043171806461
+- Configuration File: src/lib/meta-pixel.ts
+- Database Table: public.profiles (column: meta_pixel_id TEXT)
+- Database Function (RPC): public.get_meta_pixel_id(p_invite_code TEXT)
+
+Resolution Priority Order:
+1. URL Query Parameter: ?ref=, ?referral=, ?code=, ?invite=, or ?r=
+2. Session Storage Backup: sessionStorage.getItem("velvato_ref")
+3. Supabase RPC Lookup: get_meta_pixel_id(p_invite_code) -> returns custom promoter pixel ID if set
+4. Default Fallback Pixel ID: 1076043171806461 if no custom pixel is found
+
+
+3. PROMOTER MULTI-PIXEL SYSTEM
+-------------------------------------------------------------------------------
+Promoters/Affiliates can configure their own Meta Pixel ID in their account settings:
+- Settings Route: /profile/settings
+- UI Component: src/routes/profile.settings.tsx
+- Action: Promoter inputs Pixel ID -> updates public.profiles.meta_pixel_id.
+
+When a user visits a promoter's referral link (e.g. https://domain.com/auth/register?ref=CODE123):
+1. initMetaPixel() detects "ref=CODE123".
+2. Stores "CODE123" in sessionStorage under key "velvato_ref".
+3. Invokes RPC public.get_meta_pixel_id("CODE123").
+4. If a custom Pixel ID is returned, the Meta Pixel SDK initializes with the promoter's Pixel ID.
+5. All downstream conversion events (PageView, CompleteRegistration, InitiateCheckout, Purchase) 
+   are attributed directly to the promoter's Meta Ads Manager dashboard.
+
+
+4. COMPLETE META PIXEL EVENTS REFERENCE
+-------------------------------------------------------------------------------
+Event Name           | Type     | Trigger Location / File                 | Event Parameters
+---------------------+----------+-----------------------------------------+------------------------------------------------
+PageView             | Standard | Root HTML inline script + __root.tsx    | None
+ViewContent          | Standard | Product Detail page (/product/$id)      | content_category: "income_plan",
+                     |          |                                         | content_ids: plan.id,
+                     |          |                                         | content_name: plan.name,
+                     |          |                                         | content_type: "product",
+                     |          |                                         | currency: "INR",
+                     |          |                                         | value: plan.price
+InitiateCheckout     | Standard | Recharge action in /recharge            | content_category: "wallet_recharge",
+                     |          |                                         | content_name: "Velvato wallet recharge",
+                     |          |                                         | currency: "INR",
+                     |          |                                         | value: recharge_amount
+Purchase (Plan)      | Standard | Plan Buy button in /product/$id         | content_category: "income_plan",
+                     |          |                                         | content_ids: plan.id,
+                     |          |                                         | content_name: plan.name,
+                     |          |                                         | content_type: "product",
+                     |          |                                         | currency: "INR",
+                     |          |                                         | value: plan.price
+Purchase (Recharge)  | Standard | Deposit Hook in src/services/api.ts     | content_category: "wallet_recharge",
+                     |          |                                         | currency: "INR",
+                     |          |                                         | value: deposit.amount
+CompleteRegistration | Standard | Account Register in AuthScreen.tsx      | status: "success", method: "password"
+Login                | Standard | Account Login in AuthScreen.tsx         | method: "password"
+Subscribe            | Standard | Button Clicks / AuthScreen / Product    | method / action / plan / price
+WithdrawalSubmitted  | Custom   | Withdrawal submit in /withdraw          | currency: "INR", value: withdrawal_amount
+
+
+5. DEDUPLICATION & STORAGE LOGIC
+-------------------------------------------------------------------------------
+- Deposit Purchase Deduplication:
+  File: src/services/api.ts (inside useDeposits query hook)
+  Storage Key: localStorage.getItem("velvato_tracked_deposits")
+  Logic: Stores tracked deposit IDs as JSON map { [deposit_id]: true }. Prevents firing 
+  duplicate Purchase events on page refreshes or re-queries.
+
+- Referral Attribution Persistence:
+  Storage Key: sessionStorage.getItem("velvato_ref")
+  Logic: Preserves referral code across multi-step registration or navigation sessions.
+
+
+6. RELEVANT FILES & FUNCTIONS
+-------------------------------------------------------------------------------
+1. src/lib/meta-pixel.ts
+   - DEFAULT_META_PIXEL_ID
+   - initMetaPixel()
+   - trackMetaEvent(eventName, params)
+   - trackMetaCustomEvent(eventName, params)
+   - trackMetaSubscribe(params)
+
+2. src/routes/__root.tsx
+   - Injects inline Meta Pixel snippet in RootShell <head>
+   - Executes trackMetaEvent("PageView") on TanStack SPA route navigation
+
+3. src/features/auth/AuthScreen.tsx
+   - Fires CompleteRegistration and Subscribe on account registration
+   - Fires Login and Subscribe on user login
+
+4. src/routes/product.$id.tsx
+   - Fires ViewContent on plan page view
+   - Fires Purchase on successful plan purchase
+
+5. src/routes/recharge.tsx
+   - Fires InitiateCheckout on recharge modal confirmation
+
+6. src/services/api.ts
+   - Fires Purchase event for completed wallet deposits with deduplication
+
+7. src/routes/withdraw.tsx
+   - Fires custom event WithdrawalSubmitted on withdrawal request
+
+8. src/routes/profile.settings.tsx
+   - Allows promoters to save custom meta_pixel_id to public.profiles
+
+9. Supabase Migrations
+   - 20260905000000_meta_pixel.sql: Adds meta_pixel_id column to profiles table
+   - 20260905000001_get_meta_pixel.sql: Creates public.get_meta_pixel_id(p_invite_code) RPC
+
+
+7. STEP-BY-STEP INTEGRATION GUIDE FOR ANOTHER AI AGENT
+-------------------------------------------------------------------------------
+To replicate this exact Meta Pixel tracking system in another project:
+
+Step 1: Database Migration
+Create column and RPC function:
+```sql
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS meta_pixel_id text;
+
+CREATE OR REPLACE FUNCTION public.get_meta_pixel_id(p_invite_code text)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  RETURN (SELECT meta_pixel_id FROM public.profiles WHERE invite_code = p_invite_code LIMIT 1);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.get_meta_pixel_id(text) TO anon, authenticated;
+```
+
+Step 2: Create src/lib/meta-pixel.ts
+Copy the module with DEFAULT_META_PIXEL_ID, referral URL parsing, RPC lookup, and track helpers.
+
+Step 3: Root Document Setup
+In your root layout or index.html, preconnect to connect.facebook.net and inject standard fbevents.js snippet.
+Track PageView on route navigation.
+
+Step 4: Wire Events to User Actions
+- ViewContent on product pages
+- CompleteRegistration on sign-up
+- InitiateCheckout on checkout modal
+- Purchase on plan purchase and confirmed deposit
+- Custom events as required
+
+
+8. TROUBLESHOOTING & VERIFICATION GUIDE
+-------------------------------------------------------------------------------
+Common Issues & Resolutions:
+
+1. Events Not Appearing in Meta Events Manager:
+   - Check if Meta Pixel Helper extension is installed in Chrome.
+   - Verify network requests to https://www.facebook.com/tr/ in browser DevTools.
+   - Ensure ad blockers / Brave Shields are disabled during testing.
+
+2. Custom Promoter Pixel Not Initializing:
+   - Verify URL has ?ref=YOUR_CODE.
+   - Inspect network tab for Supabase RPC call get_meta_pixel_id.
+   - Confirm profile row in public.profiles has valid meta_pixel_id.
+
+3. Duplicate Purchase Events:
+   - Check localStorage key "velvato_tracked_deposits".
+   - Confirm isFirstRender ref check in root route prevents duplicate initial PageView.
+
+===============================================================================
+END OF DOCUMENTATION
+===============================================================================
